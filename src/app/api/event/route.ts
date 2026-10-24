@@ -4,6 +4,34 @@ import { recordAuditLog } from '@/lib/utils/audit';
 
 export async function GET() {
   try {
+    const isPlaceholder =
+      !process.env.NEXT_PUBLIC_SUPABASE_URL ||
+      process.env.NEXT_PUBLIC_SUPABASE_URL.includes('placeholder');
+
+    if (isPlaceholder) {
+      return NextResponse.json({
+        success: true,
+        event: {
+          id: 'dev-event-1',
+          name: 'MRF Annual Research Conclave 2026',
+          event_date: '2026-10-24',
+          timezone: 'Asia/Kolkata',
+          status: 'active',
+          kiosk_enabled: true,
+          offline_allowed: true,
+          photo_retention_days: 365,
+        },
+        session: {
+          id: 'dev-session-1',
+          event_id: 'dev-event-1',
+          name: 'General Conclave Check-in Session',
+          status: 'open',
+          opens_at: new Date().toISOString(),
+          closes_at: null,
+        },
+      });
+    }
+
     const admin = createAdminClient();
 
     const { data: event, error: eventErr } = await admin

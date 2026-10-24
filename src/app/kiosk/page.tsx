@@ -424,6 +424,30 @@ export default function KioskPage() {
                   </span>
                 </button>
               </div>
+
+              {/* Direct Camera Capture Test Shortcut */}
+              <div className="mt-8 pt-6 border-t border-[#E4E9F0] flex justify-center">
+                <button
+                  onClick={() => {
+                    setCategory('guide');
+                    setAttendee({
+                      id: 'demo-test-attendee',
+                      name: 'Camera Test Attendee',
+                      category: 'guide',
+                      identifier: 'test.camera@mrf.org',
+                      masked_identifier: 't***a@mrf.org',
+                      session_id: 'dev-session-1',
+                      session_name: 'General Conclave Check-in Session',
+                      event_name: 'MRF Annual Research Conclave 2026',
+                    });
+                    setStep('CAMERA_CAPTURE');
+                  }}
+                  className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-[#2864B4] bg-[#EAF2FC] hover:bg-[#d8e7fa] rounded-full transition-colors border border-[#2864B4]/20 shadow-xs"
+                >
+                  <Camera className="w-4 h-4" />
+                  <span>Test Camera & Photo Capture Feature Directly</span>
+                </button>
+              </div>
             </div>
           )}
 

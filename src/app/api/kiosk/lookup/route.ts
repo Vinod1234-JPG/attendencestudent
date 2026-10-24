@@ -20,6 +20,50 @@ export async function POST(request: Request) {
       );
     }
 
+    const isPlaceholder =
+      !process.env.NEXT_PUBLIC_SUPABASE_URL ||
+      process.env.NEXT_PUBLIC_SUPABASE_URL.includes('placeholder');
+
+    // Development Fallback when live Supabase is not connected yet
+    if (isPlaceholder) {
+      const normalized = category === 'guide' ? normalizeEmail(identifier) : normalizePhdId(identifier);
+      const masked = maskIdentifier(normalized, category);
+
+      let name = 'Sample Attendee';
+      let personId = 'dev-person-1';
+
+      if (category === 'guide') {
+        if (normalized.includes('natarajan')) name = 'Prof. R. Natarajan';
+        else if (normalized.includes('kulkarni')) name = 'Dr. Sunita Kulkarni';
+        else name = `Guide (${normalized.split('@')[0]})`;
+      } else {
+        if (normalized.includes('001')) name = 'Aditya Verma';
+        else if (normalized.includes('002')) name = 'Deepika Sharma';
+        else name = `PhD Scholar (${normalized})`;
+      }
+
+      return NextResponse.json({
+        success: true,
+        person: {
+          id: personId,
+          name,
+          category,
+          masked_identifier: masked,
+          identifier: normalized,
+        },
+        event: {
+          id: 'dev-event-1',
+          name: 'MRF Annual Research Conclave 2026',
+        },
+        session: {
+          id: 'dev-session-1',
+          name: 'General Conclave Check-in Session',
+        },
+        already_attended: false,
+        existing_record: null,
+      });
+    }
+
     const admin = createAdminClient();
 
     // 1. Fetch active event & session

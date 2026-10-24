@@ -5,6 +5,72 @@ export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
+    const isPlaceholder =
+      !process.env.NEXT_PUBLIC_SUPABASE_URL ||
+      process.env.NEXT_PUBLIC_SUPABASE_URL.includes('placeholder');
+
+    if (isPlaceholder) {
+      const samplePeople = [
+        {
+          id: 'dev-guide-1',
+          category: 'guide' as const,
+          name: 'Prof. R. Natarajan',
+          normalized_email: 'r.natarajan@mrf.org',
+          phd_id: null,
+        },
+        {
+          id: 'dev-guide-2',
+          category: 'guide' as const,
+          name: 'Dr. Sunita Kulkarni',
+          normalized_email: 's.kulkarni@mrf.org',
+          phd_id: null,
+        },
+        {
+          id: 'dev-scholar-1',
+          category: 'phd_scholar' as const,
+          name: 'Aditya Verma',
+          normalized_email: null,
+          phd_id: 'MRF-PHD-2026-001',
+        },
+        {
+          id: 'dev-scholar-2',
+          category: 'phd_scholar' as const,
+          name: 'Deepika Sharma',
+          normalized_email: null,
+          phd_id: 'MRF-PHD-2026-002',
+        },
+      ];
+
+      return NextResponse.json({
+        success: true,
+        dataset_version: 1,
+        generated_at: new Date().toISOString(),
+        event: {
+          id: 'dev-event-1',
+          name: 'MRF Annual Research Conclave 2026',
+          event_date: '2026-10-24',
+          timezone: 'Asia/Kolkata',
+          status: 'active',
+          kiosk_enabled: true,
+          offline_allowed: true,
+        },
+        session: {
+          id: 'dev-session-1',
+          event_id: 'dev-event-1',
+          name: 'General Conclave Check-in Session',
+          status: 'open',
+          opens_at: new Date().toISOString(),
+          closes_at: null,
+        },
+        people: samplePeople,
+        counts: {
+          guides: 2,
+          scholars: 2,
+          total: 4,
+        },
+      });
+    }
+
     const admin = createAdminClient();
 
     // 1. Fetch active event

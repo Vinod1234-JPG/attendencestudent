@@ -19,6 +19,21 @@ export async function POST(request: Request) {
       );
     }
 
+    const isPlaceholder =
+      !process.env.NEXT_PUBLIC_SUPABASE_URL ||
+      process.env.NEXT_PUBLIC_SUPABASE_URL.includes('placeholder');
+
+    if (isPlaceholder) {
+      return NextResponse.json({
+        success: true,
+        message: 'Attendance recorded successfully (Development Mode)',
+        record_id: `dev-rec-${operationId.slice(0, 8)}`,
+        attendee_name: 'Verified Attendee',
+        category: 'guide',
+        attendance_time: capturedAtDevice || new Date().toISOString(),
+      });
+    }
+
     const admin = createAdminClient();
 
     // 1. Verify session is still open
