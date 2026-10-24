@@ -1,0 +1,47 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --color-mrf-navy: #142D4E;
+    --color-mrf-dark-navy: #0B1B30;
+    --color-mrf-blue: #2864B4;
+    --color-mrf-light-blue: #EAF2FC;
+    --color-mrf-bg: #F7F9FC;
+    --color-mrf-card: #FFFFFF;
+    --color-mrf-text: #182230;
+    --color-mrf-muted: #667085;
+    --color-mrf-border: #E4E9F0;
+    --color-mrf-success: #16835D;
+    --color-mrf-warning: #B7791F;
+    --color-mrf-error: #C0393A;
+    --color-mrf-badge: #EEF1F5;
+  }
+
+  body {
+    background-color: var(--color-mrf-bg);
+    color: var(--color-mrf-text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    margin: 0;
+    padding: 0;
+  }
+}
+
+/* Custom scrollbars for clean academic look */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #F7F9FC;
+}
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}
