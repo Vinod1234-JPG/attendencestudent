@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { normalizeEmail, normalizePhdId, maskIdentifier } from '@/lib/utils/normalization';
+import { getDevStorage } from '@/lib/db/devStore';
 
 export async function POST(request: Request) {
   try {
@@ -24,32 +25,50 @@ export async function POST(request: Request) {
       !process.env.NEXT_PUBLIC_SUPABASE_URL ||
       process.env.NEXT_PUBLIC_SUPABASE_URL.includes('placeholder');
 
+    const normalized = category === 'guide' ? normalizeEmail(identifier) : normalizePhdId(identifier);
+
     // Development Fallback when live Supabase is not connected yet
     if (isPlaceholder) {
-      const normalized = category === 'guide' ? normalizeEmail(identifier) : normalizePhdId(identifier);
-      const masked = maskIdentifier(normalized, category);
+      const devStore = getDevStorage();
+      let matchedPerson = devStore.people.find((p) => {
+        if (category === 'guide') {
+          return p.category === 'guide' && p.normalized_email === normalized;
+        } else {
+          return p.category === 'phd_scholar' && p.phd_id === normalized;
+        }
+      });
 
-      let name = 'Sample Attendee';
-      let personId = 'dev-person-1';
-
-      if (category === 'guide') {
-        if (normalized.includes('natarajan')) name = 'Prof. R. Natarajan';
-        else if (normalized.includes('kulkarni')) name = 'Dr. Sunita Kulkarni';
-        else name = `Guide (${normalized.split('@')[0]})`;
-      } else {
-        if (normalized.includes('001')) name = 'Aditya Verma';
-        else if (normalized.includes('002')) name = 'Deepika Sharma';
-        else name = `PhD Scholar (${normalized})`;
+      // If not in dev database, create on the fly so attendee can proceed in test mode
+      if (!matchedPerson) {
+        matchedPerson = {
+          id: `dev-${category}-${Date.now()}`,
+          name: category === 'guide' ? `Guide (${normalized.split('@')[0]})` : `PhD Scholar (${normalized})`,
+          category,
+          normalized_email: category === 'guide' ? normalized : null,
+          phd_id: category === 'phd_scholar' ? normalized : null,
+          metadata: {
+            Status: 'Self-Registered at Kiosk',
+            Category: category === 'guide' ? 'Guide' : 'PhD Scholar',
+          },
+        };
       }
+
+      // Check if already attended in dev store
+      const alreadyAttended = devStore.attendanceRecords.some(
+        (r) => r.attendee.id === matchedPerson!.id || r.attendee.identifier === normalized
+      );
+
+      const masked = maskIdentifier(normalized, category);
 
       return NextResponse.json({
         success: true,
         person: {
-          id: personId,
-          name,
-          category,
+          id: matchedPerson.id,
+          name: matchedPerson.name,
+          category: matchedPerson.category,
           masked_identifier: masked,
           identifier: normalized,
+          extra_details: matchedPerson.metadata || {},
         },
         event: {
           id: 'dev-event-1',
@@ -59,7 +78,7 @@ export async function POST(request: Request) {
           id: 'dev-session-1',
           name: 'General Conclave Check-in Session',
         },
-        already_attended: false,
+        already_attended: alreadyAttended,
         existing_record: null,
       });
     }
@@ -103,10 +122,8 @@ export async function POST(request: Request) {
 
     // 2. Lookup attendee in `people`
     let person = null;
-    let normalized = '';
 
     if (category === 'guide') {
-      normalized = normalizeEmail(identifier);
       const { data, error } = await admin
         .from('people')
         .select('id, name, category, normalized_email')
@@ -126,7 +143,6 @@ export async function POST(request: Request) {
       person = data;
     } else {
       // PhD Scholar
-      normalized = normalizePhdId(identifier);
       const { data, error } = await admin
         .from('people')
         .select('id, name, category, phd_id')

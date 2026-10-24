@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { getDevStorage } from '@/lib/db/devStore';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,6 +12,42 @@ export async function GET(request: Request) {
     const page = parseInt(searchParams.get('page') || '1', 10);
     const limit = parseInt(searchParams.get('limit') || '20', 10);
     const offset = (page - 1) * limit;
+
+    const isPlaceholder =
+      !process.env.NEXT_PUBLIC_SUPABASE_URL ||
+      process.env.NEXT_PUBLIC_SUPABASE_URL.includes('placeholder');
+
+    if (isPlaceholder) {
+      const devStore = getDevStorage();
+      let records = [...devStore.attendanceRecords];
+
+      if (category && (category === 'guide' || category === 'phd_scholar')) {
+        records = records.filter((r) => r.attendee.category === category);
+      }
+
+      if (search.trim()) {
+        const term = search.trim().toLowerCase();
+        records = records.filter(
+          (r) =>
+            r.attendee.name.toLowerCase().includes(term) ||
+            r.attendee.identifier.toLowerCase().includes(term)
+        );
+      }
+
+      const total = records.length;
+      const paginated = records.slice(offset, offset + limit);
+
+      return NextResponse.json({
+        success: true,
+        records: paginated,
+        pagination: {
+          page,
+          limit,
+          total,
+          total_pages: Math.ceil(total / limit) || 1,
+        },
+      });
+    }
 
     const admin = createAdminClient();
 
@@ -30,7 +67,8 @@ export async function GET(request: Request) {
           name,
           category,
           normalized_email,
-          phd_id
+          phd_id,
+          metadata
         ),
         event_sessions (
           name
@@ -104,6 +142,7 @@ export async function GET(request: Request) {
               rec.people.category === 'guide'
                 ? rec.people.normalized_email
                 : rec.people.phd_id,
+            extra_details: rec.people.metadata || {},
           },
           photo: {
             available: !!photoSignedUrl,

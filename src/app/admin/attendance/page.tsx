@@ -312,6 +312,23 @@ export default function AttendanceRecordsPage() {
                 <span className="text-[#667085]">Attendance Session:</span>
                 <span className="text-[#182230]">{selectedRecord.session_name}</span>
               </div>
+
+              {/* Render Extra Uploaded Columns/Details */}
+              {selectedRecord.attendee.extra_details &&
+                Object.keys(selectedRecord.attendee.extra_details).length > 0 && (
+                  <div className="border-b border-[#E4E9F0] pb-2 pt-1 space-y-1.5">
+                    <span className="text-[11px] font-bold text-[#142D4E] block uppercase tracking-wider">
+                      Additional Uploaded Details:
+                    </span>
+                    {Object.entries(selectedRecord.attendee.extra_details).map(([k, v]) => (
+                      <div key={k} className="flex justify-between text-xs">
+                        <span className="text-[#667085]">{k}:</span>
+                        <span className="font-semibold text-[#182230]">{String(v)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
               <div className="flex justify-between">
                 <span className="text-[#667085]">Client Operation ID:</span>
                 <span className="font-mono text-[10px] text-[#667085]">

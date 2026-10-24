@@ -28,6 +28,7 @@ export default function ImportPage() {
   const [category, setCategory] = useState<'guide' | 'phd_scholar'>('guide');
   const [file, setFile] = useState<File | null>(null);
   const [parsedRows, setParsedRows] = useState<any[]>([]);
+  const [detectedColumns, setDetectedColumns] = useState<string[]>([]);
   const [validRows, setValidRows] = useState<any[]>([]);
   const [invalidRows, setInvalidRows] = useState<any[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -86,6 +87,8 @@ export default function ImportPage() {
       }
 
       setParsedRows(rows);
+      const cols = rows.length > 0 ? Object.keys(rows[0]) : [];
+      setDetectedColumns(cols);
 
       // Local validation
       const valid: any[] = [];
@@ -348,34 +351,54 @@ export default function ImportPage() {
               </div>
             </div>
 
-            {/* Preview Sample Table */}
-            <h3 className="text-xs font-bold text-[#182230] uppercase mb-2">Preview (First 5 Rows)</h3>
-            <div className="overflow-x-auto border border-[#E4E9F0] rounded-lg mb-6">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-[#F7F9FC] text-[#667085] border-b border-[#E4E9F0]">
+            {/* Detected Columns List */}
+            <div className="mb-4 p-3 bg-[#EAF2FC]/60 border border-[#2864B4]/20 rounded-lg">
+              <span className="text-xs font-bold text-[#142D4E] block mb-1.5">
+                All Detected Columns from Uploaded Spreadsheet ({detectedColumns.length}):
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {detectedColumns.map((col) => (
+                  <span
+                    key={col}
+                    className="px-2 py-0.5 rounded text-[11px] font-mono font-semibold bg-white border border-[#CBD5E1] text-[#142D4E]"
+                  >
+                    {col}
+                  </span>
+                ))}
+              </div>
+              <p className="text-[11px] text-[#667085] mt-1.5">
+                All column details and metadata will be permanently stored and associated with each attendee's record.
+              </p>
+            </div>
+
+            {/* Preview Sample Table with ALL columns */}
+            <h3 className="text-xs font-bold text-[#182230] uppercase mb-2">
+              Preview Data ({Math.min(10, parsedRows.length)} of {parsedRows.length} Rows)
+            </h3>
+            <div className="overflow-x-auto border border-[#E4E9F0] rounded-lg mb-6 max-h-96">
+              <table className="w-full text-left text-xs whitespace-nowrap">
+                <thead className="bg-[#F7F9FC] text-[#667085] border-b border-[#E4E9F0] sticky top-0">
                   <tr>
-                    <th className="px-4 py-2.5 font-semibold">Row</th>
-                    <th className="px-4 py-2.5 font-semibold">Attendee Name</th>
-                    <th className="px-4 py-2.5 font-semibold">
-                      {category === 'guide' ? 'Email Address' : 'PhD ID'}
-                    </th>
-                    <th className="px-4 py-2.5 font-semibold">Status</th>
+                    <th className="px-4 py-2.5 font-semibold bg-[#F7F9FC]">Row #</th>
+                    {detectedColumns.map((col) => (
+                      <th key={col} className="px-4 py-2.5 font-semibold bg-[#F7F9FC]">
+                        {col}
+                      </th>
+                    ))}
+                    <th className="px-4 py-2.5 font-semibold bg-[#F7F9FC]">Validation Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#E4E9F0]">
-                  {parsedRows.slice(0, 5).map((row, idx) => (
-                    <tr key={idx}>
-                      <td className="px-4 py-2 text-[#667085]">{idx + 1}</td>
-                      <td className="px-4 py-2 font-medium text-[#182230]">
-                        {row.name || row.Name || '—'}
-                      </td>
-                      <td className="px-4 py-2 font-mono text-[#667085]">
-                        {category === 'guide'
-                          ? row.email || row.Email || '—'
-                          : row.phd_id || row['PhD ID'] || row.id || '—'}
-                      </td>
+                  {parsedRows.slice(0, 10).map((row, idx) => (
+                    <tr key={idx} className="hover:bg-[#F7F9FC]/70">
+                      <td className="px-4 py-2 text-[#667085] font-mono">{idx + 1}</td>
+                      {detectedColumns.map((col) => (
+                        <td key={col} className="px-4 py-2 text-[#182230]">
+                          {String(row[col] ?? '') || '—'}
+                        </td>
+                      ))}
                       <td className="px-4 py-2">
-                        <Badge variant="success">Validated</Badge>
+                        <Badge variant="success">Ready</Badge>
                       </td>
                     </tr>
                   ))}

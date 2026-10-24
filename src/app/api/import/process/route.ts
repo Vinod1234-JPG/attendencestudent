@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { normalizeEmail, isValidEmail, normalizePhdId, isValidPhdId } from '@/lib/utils/normalization';
 import { recordAuditLog } from '@/lib/utils/audit';
+import { addDevPeople } from '@/lib/db/devStore';
 
 export async function POST(request: Request) {
   try {
@@ -19,6 +20,121 @@ export async function POST(request: Request) {
         { error: 'Category must be either "guide" or "phd_scholar".' },
         { status: 400 }
       );
+    }
+
+    const isPlaceholder =
+      !process.env.NEXT_PUBLIC_SUPABASE_URL ||
+      process.env.NEXT_PUBLIC_SUPABASE_URL.includes('placeholder');
+
+    const validPeopleToInsert: any[] = [];
+    const errorRecords: any[] = [];
+    const seenInFile = new Set<string>();
+
+    rows.forEach((row: any, index: number) => {
+      const rowNumber = index + 1;
+      const rawName = row.name || row.Name || row['Full Name'] || row['Attendee Name'] || '';
+      const name = String(rawName).trim();
+
+      if (!name) {
+        errorRecords.push({
+          row_number: rowNumber,
+          error_type: 'MISSING_NAME',
+          message: 'The attendee name is missing or blank.',
+          diagnostic_details: row,
+        });
+        return;
+      }
+
+      // Collect all remaining columns as metadata (e.g. Commerce, Department, Mobile, Topic, etc.)
+      const metadata: Record<string, any> = { ...row };
+      delete metadata.name;
+      delete metadata.Name;
+      delete metadata['Full Name'];
+
+      if (category === 'guide') {
+        const rawEmail = row.email || row.Email || row['Email Address'] || '';
+        const normalized = normalizeEmail(String(rawEmail));
+        delete metadata.email;
+        delete metadata.Email;
+        delete metadata['Email Address'];
+
+        if (!normalized || !isValidEmail(normalized)) {
+          errorRecords.push({
+            row_number: rowNumber,
+            error_type: 'INVALID_EMAIL',
+            message: `Invalid or missing email address: "${rawEmail}".`,
+            diagnostic_details: row,
+          });
+          return;
+        }
+
+        if (seenInFile.has(normalized)) {
+          errorRecords.push({
+            row_number: rowNumber,
+            error_type: 'FILE_DUPLICATE_EMAIL',
+            message: `Duplicate email within the uploaded file: "${normalized}".`,
+            diagnostic_details: row,
+          });
+          return;
+        }
+
+        seenInFile.add(normalized);
+        validPeopleToInsert.push({
+          id: `guide-${Date.now()}-${index}`,
+          category: 'guide',
+          name,
+          normalized_email: normalized,
+          metadata,
+        });
+      } else {
+        // PhD Scholar
+        const rawId = row.phd_id || row['PhD ID'] || row['Ph.D ID'] || row.id || row.ID || '';
+        const normalized = normalizePhdId(String(rawId));
+        delete metadata.phd_id;
+        delete metadata['PhD ID'];
+        delete metadata['Ph.D ID'];
+
+        if (!normalized || !isValidPhdId(normalized)) {
+          errorRecords.push({
+            row_number: rowNumber,
+            error_type: 'INVALID_PHD_ID',
+            message: `Invalid or missing PhD ID: "${rawId}".`,
+            diagnostic_details: row,
+          });
+          return;
+        }
+
+        if (seenInFile.has(normalized)) {
+          errorRecords.push({
+            row_number: rowNumber,
+            error_type: 'FILE_DUPLICATE_PHD_ID',
+            message: `Duplicate PhD ID within the uploaded file: "${normalized}".`,
+            diagnostic_details: row,
+          });
+          return;
+        }
+
+        seenInFile.add(normalized);
+        validPeopleToInsert.push({
+          id: `scholar-${Date.now()}-${index}`,
+          category: 'phd_scholar',
+          name,
+          phd_id: normalized,
+          metadata,
+        });
+      }
+    });
+
+    if (isPlaceholder) {
+      addDevPeople(validPeopleToInsert);
+      return NextResponse.json({
+        success: true,
+        batch_id: `dev-batch-${Date.now()}`,
+        total_rows: rows.length,
+        success_count: validPeopleToInsert.length,
+        error_count: errorRecords.length,
+        errors: errorRecords.slice(0, 50),
+      });
     }
 
     const admin = createAdminClient();
@@ -43,205 +159,36 @@ export async function POST(request: Request) {
     }
 
     const batchId = batch.id;
-    const validPeopleToInsert: any[] = [];
-    const errorRecords: any[] = [];
-    const seenInFile = new Set<string>();
+    const peopleForDb = validPeopleToInsert.map((p) => ({
+      ...p,
+      import_batch_id: batchId,
+    }));
 
-    // 2. Fetch existing identifiers to detect conflicts
-    let existingIdentifiers = new Set<string>();
-    if (category === 'guide') {
-      const { data: existingGuides } = await admin
-        .from('people')
-        .select('normalized_email')
-        .eq('category', 'guide');
-      if (existingGuides) {
-        existingGuides.forEach((g) => {
-          if (g.normalized_email) existingIdentifiers.add(g.normalized_email);
-        });
-      }
-    } else {
-      const { data: existingScholars } = await admin
-        .from('people')
-        .select('phd_id')
-        .eq('category', 'phd_scholar');
-      if (existingScholars) {
-        existingScholars.forEach((s) => {
-          if (s.phd_id) existingIdentifiers.add(s.phd_id);
-        });
-      }
-    }
-
-    // 3. Row-by-row validation
-    rows.forEach((row: any, index: number) => {
-      const rowNumber = index + 1;
-      const rawName = row.name || row.Name || row['Full Name'] || '';
-      const name = String(rawName).trim();
-
-      if (!name) {
-        errorRecords.push({
-          import_batch_id: batchId,
-          row_number: rowNumber,
-          error_type: 'MISSING_NAME',
-          message: 'The attendee name is missing or blank.',
-          diagnostic_details: row,
-        });
-        return;
-      }
-
-      if (category === 'guide') {
-        const rawEmail = row.email || row.Email || row['Email Address'] || '';
-        const normalized = normalizeEmail(String(rawEmail));
-
-        if (!normalized || !isValidEmail(normalized)) {
-          errorRecords.push({
-            import_batch_id: batchId,
-            row_number: rowNumber,
-            error_type: 'INVALID_EMAIL',
-            message: `Invalid or missing email address: "${rawEmail}".`,
-            diagnostic_details: row,
-          });
-          return;
-        }
-
-        if (seenInFile.has(normalized)) {
-          errorRecords.push({
-            import_batch_id: batchId,
-            row_number: rowNumber,
-            error_type: 'FILE_DUPLICATE_EMAIL',
-            message: `Duplicate email within the uploaded file: "${normalized}".`,
-            diagnostic_details: row,
-          });
-          return;
-        }
-
-        if (existingIdentifiers.has(normalized)) {
-          errorRecords.push({
-            import_batch_id: batchId,
-            row_number: rowNumber,
-            error_type: 'EXISTING_EMAIL',
-            message: `Guide with email "${normalized}" is already registered in MRF database.`,
-            diagnostic_details: row,
-          });
-          return;
-        }
-
-        seenInFile.add(normalized);
-        validPeopleToInsert.push({
-          category: 'guide',
-          name,
-          normalized_email: normalized,
-          import_batch_id: batchId,
-        });
-      } else {
-        // PhD Scholar
-        const rawId = row.phd_id || row['PhD ID'] || row['Ph.D ID'] || row.id || row.ID || '';
-        const normalized = normalizePhdId(String(rawId));
-
-        if (!normalized || !isValidPhdId(normalized)) {
-          errorRecords.push({
-            import_batch_id: batchId,
-            row_number: rowNumber,
-            error_type: 'INVALID_PHD_ID',
-            message: `Invalid or missing PhD ID: "${rawId}".`,
-            diagnostic_details: row,
-          });
-          return;
-        }
-
-        if (seenInFile.has(normalized)) {
-          errorRecords.push({
-            import_batch_id: batchId,
-            row_number: rowNumber,
-            error_type: 'FILE_DUPLICATE_PHD_ID',
-            message: `Duplicate PhD ID within the uploaded file: "${normalized}".`,
-            diagnostic_details: row,
-          });
-          return;
-        }
-
-        if (existingIdentifiers.has(normalized)) {
-          errorRecords.push({
-            import_batch_id: batchId,
-            row_number: rowNumber,
-            error_type: 'EXISTING_PHD_ID',
-            message: `PhD Scholar with ID "${normalized}" is already registered in MRF database.`,
-            diagnostic_details: row,
-          });
-          return;
-        }
-
-        seenInFile.add(normalized);
-        validPeopleToInsert.push({
-          category: 'phd_scholar',
-          name,
-          phd_id: normalized,
-          import_batch_id: batchId,
-        });
-      }
-    });
-
-    // 4. Insert valid records
-    let successCount = 0;
-    if (validPeopleToInsert.length > 0) {
-      const { error: insertErr } = await admin
-        .from('people')
-        .insert(validPeopleToInsert);
-
+    if (peopleForDb.length > 0) {
+      const { error: insertErr } = await admin.from('people').insert(peopleForDb);
       if (insertErr) {
-        console.error('Batch insert error:', insertErr);
-        await admin.from('import_batches').update({
-          status: 'failed',
-          summary: { error: insertErr.message },
-        }).eq('id', batchId);
-
-        return NextResponse.json(
-          { error: `Database insert failed: ${insertErr.message}` },
-          { status: 500 }
-        );
+        return NextResponse.json({ error: insertErr.message }, { status: 500 });
       }
-      successCount = validPeopleToInsert.length;
     }
 
-    // 5. Store import errors if any
-    if (errorRecords.length > 0) {
-      await admin.from('import_errors').insert(errorRecords);
-    }
-
-    // 6. Finalize batch summary
     const completedAt = new Date().toISOString();
-    await admin.from('import_batches').update({
-      completed_at: completedAt,
-      status: 'completed',
-      success_count: successCount,
-      error_count: errorRecords.length,
-      summary: {
-        total: rows.length,
-        created: successCount,
-        errors: errorRecords.length,
-      },
-    }).eq('id', batchId);
-
-    // 7. Audit log
-    await recordAuditLog({
-      action: 'MRF_DATA_IMPORTED',
-      entityType: 'IMPORT_BATCH',
-      entityId: batchId,
-      outcome: errorRecords.length === 0 ? 'success' : 'warning',
-      metadata: {
-        category,
-        total: rows.length,
-        created: successCount,
-        errors: errorRecords.length,
-      },
-    });
+    await admin
+      .from('import_batches')
+      .update({
+        completed_at: completedAt,
+        status: 'completed',
+        success_count: validPeopleToInsert.length,
+        error_count: errorRecords.length,
+      })
+      .eq('id', batchId);
 
     return NextResponse.json({
       success: true,
       batch_id: batchId,
       total_rows: rows.length,
-      success_count: successCount,
+      success_count: validPeopleToInsert.length,
       error_count: errorRecords.length,
-      errors: errorRecords.slice(0, 50), // Return sample of errors for UI
+      errors: errorRecords.slice(0, 50),
     });
   } catch (err: any) {
     console.error('Import processing error:', err);

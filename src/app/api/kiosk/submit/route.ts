@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { recordAuditLog } from '@/lib/utils/audit';
+import { addDevAttendanceRecord, getDevStorage } from '@/lib/db/devStore';
 
 export async function POST(request: Request) {
   try {
@@ -9,6 +10,9 @@ export async function POST(request: Request) {
     const operationId = formData.get('operation_id') as string;
     const sessionId = formData.get('session_id') as string;
     const personId = formData.get('person_id') as string;
+    const attendeeName = (formData.get('attendee_name') as string) || 'Attendee';
+    const category = (formData.get('category') as string) || 'guide';
+    const identifier = (formData.get('identifier') as string) || '';
     const capturedAtDevice = formData.get('captured_at_device') as string;
     const photoFile = formData.get('photo') as File | null;
 
@@ -23,14 +27,45 @@ export async function POST(request: Request) {
       !process.env.NEXT_PUBLIC_SUPABASE_URL ||
       process.env.NEXT_PUBLIC_SUPABASE_URL.includes('placeholder');
 
+    const photoBuffer = Buffer.from(await photoFile.arrayBuffer());
+    const base64Photo = `data:${photoFile.type || 'image/jpeg'};base64,${photoBuffer.toString('base64')}`;
+    const nowIso = new Date().toISOString();
+
     if (isPlaceholder) {
+      const devStore = getDevStorage();
+      const person = devStore.people.find((p) => p.id === personId);
+
+      const devRecord = {
+        id: `dev-rec-${operationId.slice(0, 8)}`,
+        operation_id: operationId,
+        captured_at_device: capturedAtDevice || nowIso,
+        received_at_server: nowIso,
+        status: 'confirmed',
+        session_name: 'General Conclave Check-in Session',
+        attendee: {
+          id: personId,
+          name: person?.name || attendeeName,
+          category: (person?.category || category) as 'guide' | 'phd_scholar',
+          identifier: person?.normalized_email || person?.phd_id || identifier,
+          extra_details: person?.metadata || {},
+        },
+        photo: {
+          available: true,
+          signed_url: base64Photo,
+          file_size: photoFile.size,
+          content_type: photoFile.type || 'image/jpeg',
+        },
+      };
+
+      addDevAttendanceRecord(devRecord);
+
       return NextResponse.json({
         success: true,
-        message: 'Attendance recorded successfully (Development Mode)',
-        record_id: `dev-rec-${operationId.slice(0, 8)}`,
-        attendee_name: 'Verified Attendee',
-        category: 'guide',
-        attendance_time: capturedAtDevice || new Date().toISOString(),
+        message: 'Attendance recorded successfully',
+        record_id: devRecord.id,
+        attendee_name: devRecord.attendee.name,
+        category: devRecord.attendee.category,
+        attendance_time: devRecord.captured_at_device,
       });
     }
 
@@ -107,7 +142,6 @@ export async function POST(request: Request) {
     }
 
     // 4. Upload photo to private Supabase Storage
-    const photoBuffer = Buffer.from(await photoFile.arrayBuffer());
     const storageKey = `photos/${sessionId}/${personId}_${operationId}.jpg`;
 
     const { error: uploadErr } = await admin.storage
@@ -122,7 +156,6 @@ export async function POST(request: Request) {
     }
 
     // 5. Insert Attendance Record
-    const nowIso = new Date().toISOString();
     const { data: newRecord, error: insertErr } = await admin
       .from('attendance_records')
       .insert({
