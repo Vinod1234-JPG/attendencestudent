@@ -26,7 +26,36 @@ export async function POST(request: Request) {
       !process.env.NEXT_PUBLIC_SUPABASE_URL ||
       process.env.NEXT_PUBLIC_SUPABASE_URL.includes('placeholder');
 
-    const validPeopleToInsert: any[] = [];
+    const admin = isPlaceholder ? null : createAdminClient();
+
+    // 1. Fetch existing identifiers from Database to detect existing people
+    const existingIdentifiers = new Set<string>();
+    if (admin) {
+      if (category === 'guide') {
+        const { data: existingGuides } = await admin
+          .from('people')
+          .select('normalized_email')
+          .eq('category', 'guide');
+        if (existingGuides) {
+          existingGuides.forEach((g) => {
+            if (g.normalized_email) existingIdentifiers.add(g.normalized_email.toLowerCase());
+          });
+        }
+      } else {
+        const { data: existingScholars } = await admin
+          .from('people')
+          .select('phd_id')
+          .eq('category', 'phd_scholar');
+        if (existingScholars) {
+          existingScholars.forEach((s) => {
+            if (s.phd_id) existingIdentifiers.add(s.phd_id.toUpperCase());
+          });
+        }
+      }
+    }
+
+    const newPeopleToInsert: any[] = [];
+    const existingPeopleToUpdate: any[] = [];
     const errorRecords: any[] = [];
     const seenInFile = new Set<string>();
 
@@ -79,13 +108,22 @@ export async function POST(request: Request) {
         }
 
         seenInFile.add(normalized);
-        validPeopleToInsert.push({
-          id: crypto.randomUUID(),
+
+        const personPayload = {
           category: 'guide',
           name,
           normalized_email: normalized,
           metadata,
-        });
+        };
+
+        if (existingIdentifiers.has(normalized)) {
+          existingPeopleToUpdate.push(personPayload);
+        } else {
+          newPeopleToInsert.push({
+            id: crypto.randomUUID(),
+            ...personPayload,
+          });
+        }
       } else {
         // PhD Scholar
         const rawId = row.phd_id || row['PhD ID'] || row['Ph.D ID'] || row.id || row.ID || '';
@@ -115,32 +153,42 @@ export async function POST(request: Request) {
         }
 
         seenInFile.add(normalized);
-        validPeopleToInsert.push({
-          id: crypto.randomUUID(),
+
+        const personPayload = {
           category: 'phd_scholar',
           name,
           phd_id: normalized,
           metadata,
-        });
+        };
+
+        if (existingIdentifiers.has(normalized)) {
+          existingPeopleToUpdate.push(personPayload);
+        } else {
+          newPeopleToInsert.push({
+            id: crypto.randomUUID(),
+            ...personPayload,
+          });
+        }
       }
     });
 
     if (isPlaceholder) {
-      addDevPeople(validPeopleToInsert);
+      addDevPeople([...newPeopleToInsert, ...existingPeopleToUpdate]);
       return NextResponse.json({
         success: true,
         batch_id: `dev-batch-${Date.now()}`,
         total_rows: rows.length,
-        success_count: validPeopleToInsert.length,
+        created_count: newPeopleToInsert.length,
+        updated_count: existingPeopleToUpdate.length,
+        success_count: newPeopleToInsert.length + existingPeopleToUpdate.length,
         error_count: errorRecords.length,
         errors: errorRecords.slice(0, 50),
       });
     }
 
-    const admin = createAdminClient();
-
+    // Live Supabase Commit
     // 1. Create import_batch record
-    const { data: batch, error: batchErr } = await admin
+    const { data: batch, error: batchErr } = await admin!
       .from('import_batches')
       .insert({
         category,
@@ -159,34 +207,75 @@ export async function POST(request: Request) {
     }
 
     const batchId = batch.id;
-    const peopleForDb = validPeopleToInsert.map((p) => ({
-      ...p,
-      import_batch_id: batchId,
-    }));
 
-    if (peopleForDb.length > 0) {
-      const { error: insertErr } = await admin.from('people').insert(peopleForDb);
+    // 2. Insert genuinely new records
+    if (newPeopleToInsert.length > 0) {
+      const peopleForDb = newPeopleToInsert.map((p) => ({
+        ...p,
+        import_batch_id: batchId,
+      }));
+      const { error: insertErr } = await admin!.from('people').insert(peopleForDb);
       if (insertErr) {
+        console.error('Insert new people error:', insertErr);
         return NextResponse.json({ error: insertErr.message }, { status: 500 });
       }
     }
 
+    // 3. Update existing records with new metadata/name
+    for (const p of existingPeopleToUpdate) {
+      const matchCol = category === 'guide' ? 'normalized_email' : 'phd_id';
+      const matchVal = category === 'guide' ? p.normalized_email : p.phd_id;
+      await admin!
+        .from('people')
+        .update({
+          name: p.name,
+          metadata: p.metadata,
+          import_batch_id: batchId,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('category', category)
+        .eq(matchCol, matchVal);
+    }
+
+    // 4. Update import batch summary
     const completedAt = new Date().toISOString();
-    await admin
+    const totalSuccessful = newPeopleToInsert.length + existingPeopleToUpdate.length;
+    await admin!
       .from('import_batches')
       .update({
         completed_at: completedAt,
         status: 'completed',
-        success_count: validPeopleToInsert.length,
+        success_count: totalSuccessful,
         error_count: errorRecords.length,
+        summary: {
+          total: rows.length,
+          created: newPeopleToInsert.length,
+          updated: existingPeopleToUpdate.length,
+          errors: errorRecords.length,
+        },
       })
       .eq('id', batchId);
+
+    await recordAuditLog({
+      action: 'MRF_DATA_IMPORTED',
+      entityType: 'IMPORT_BATCH',
+      entityId: batchId,
+      outcome: 'success',
+      metadata: {
+        category,
+        created: newPeopleToInsert.length,
+        updated: existingPeopleToUpdate.length,
+        total: rows.length,
+      },
+    });
 
     return NextResponse.json({
       success: true,
       batch_id: batchId,
       total_rows: rows.length,
-      success_count: validPeopleToInsert.length,
+      created_count: newPeopleToInsert.length,
+      updated_count: existingPeopleToUpdate.length,
+      success_count: totalSuccessful,
       error_count: errorRecords.length,
       errors: errorRecords.slice(0, 50),
     });

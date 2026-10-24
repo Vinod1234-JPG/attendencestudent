@@ -437,18 +437,22 @@ export default function ImportPage() {
             The attendee records have been committed to the Maharaja Research Foundation database.
           </p>
 
-          <div className="grid grid-cols-3 gap-4 max-w-lg mx-auto mb-8">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 max-w-2xl mx-auto mb-8">
             <div className="p-4 bg-[#F7F9FC] border border-[#E4E9F0] rounded-lg">
-              <span className="text-xs text-[#667085]">Processed</span>
+              <span className="text-xs text-[#667085]">Total Rows</span>
               <p className="text-2xl font-bold text-[#142D4E]">{importResult.total_rows}</p>
             </div>
             <div className="p-4 bg-[#16835D]/10 border border-[#16835D]/20 rounded-lg">
-              <span className="text-xs text-[#16835D] font-medium">Created</span>
-              <p className="text-2xl font-bold text-[#16835D]">{importResult.success_count}</p>
+              <span className="text-xs text-[#16835D] font-medium">Newly Created</span>
+              <p className="text-2xl font-bold text-[#16835D]">{importResult.created_count ?? 0}</p>
+            </div>
+            <div className="p-4 bg-[#2864B4]/10 border border-[#2864B4]/20 rounded-lg">
+              <span className="text-xs text-[#2864B4] font-medium">Existing Updated</span>
+              <p className="text-2xl font-bold text-[#2864B4]">{importResult.updated_count ?? 0}</p>
             </div>
             <div className="p-4 bg-[#C0393A]/10 border border-[#C0393A]/20 rounded-lg">
-              <span className="text-xs text-[#C0393A] font-medium">Skipped/Errors</span>
-              <p className="text-2xl font-bold text-[#C0393A]">{importResult.error_count}</p>
+              <span className="text-xs text-[#C0393A] font-medium">Errors</span>
+              <p className="text-2xl font-bold text-[#C0393A]">{importResult.error_count ?? 0}</p>
             </div>
           </div>
 
