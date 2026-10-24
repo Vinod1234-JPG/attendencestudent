@@ -73,6 +73,7 @@ CREATE TABLE IF NOT EXISTS public.people (
     name TEXT NOT NULL,
     normalized_email TEXT,
     phd_id TEXT,
+    metadata JSONB DEFAULT '{}'::jsonb,
     import_batch_id UUID REFERENCES public.import_batches(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
