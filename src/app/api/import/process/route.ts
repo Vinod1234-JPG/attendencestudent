@@ -80,7 +80,7 @@ export async function POST(request: Request) {
 
         seenInFile.add(normalized);
         validPeopleToInsert.push({
-          id: `guide-${Date.now()}-${index}`,
+          id: crypto.randomUUID(),
           category: 'guide',
           name,
           normalized_email: normalized,
@@ -116,7 +116,7 @@ export async function POST(request: Request) {
 
         seenInFile.add(normalized);
         validPeopleToInsert.push({
-          id: `scholar-${Date.now()}-${index}`,
+          id: crypto.randomUUID(),
           category: 'phd_scholar',
           name,
           phd_id: normalized,

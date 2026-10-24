@@ -41,7 +41,7 @@ export async function POST(request: Request) {
       // If not in dev database, create on the fly so attendee can proceed in test mode
       if (!matchedPerson) {
         matchedPerson = {
-          id: `dev-${category}-${Date.now()}`,
+          id: crypto.randomUUID(),
           name: category === 'guide' ? `Guide (${normalized.split('@')[0]})` : `PhD Scholar (${normalized})`,
           category,
           normalized_email: category === 'guide' ? normalized : null,
