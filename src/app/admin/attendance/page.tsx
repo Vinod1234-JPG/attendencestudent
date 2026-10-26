@@ -63,6 +63,16 @@ export default function AttendanceRecordsPage() {
 
   useEffect(() => {
     fetchRecords();
+
+    // Auto-refresh when tab gains focus or every 10 seconds for real-time live events
+    const onFocus = () => fetchRecords();
+    window.addEventListener('focus', onFocus);
+    const interval = setInterval(fetchRecords, 10000);
+
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      clearInterval(interval);
+    };
   }, [page, category]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {

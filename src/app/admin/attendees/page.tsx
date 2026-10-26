@@ -81,6 +81,16 @@ export default function RegisteredAttendeesPage() {
 
   useEffect(() => {
     fetchAttendees();
+
+    // Auto-refresh when tab gains focus or every 10 seconds for real-time live events
+    const onFocus = () => fetchAttendees();
+    window.addEventListener('focus', onFocus);
+    const interval = setInterval(fetchAttendees, 10000);
+
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      clearInterval(interval);
+    };
   }, [categoryFilter, statusFilter]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {

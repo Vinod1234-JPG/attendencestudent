@@ -92,6 +92,16 @@ export default function AdminDashboardPage() {
 
   useEffect(() => {
     fetchStats();
+
+    // Auto-refresh when tab gains focus or every 10 seconds for real-time live events
+    const onFocus = () => fetchStats();
+    window.addEventListener('focus', onFocus);
+    const interval = setInterval(fetchStats, 10000);
+
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      clearInterval(interval);
+    };
   }, []);
 
   return (
