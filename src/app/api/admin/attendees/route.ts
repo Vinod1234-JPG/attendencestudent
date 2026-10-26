@@ -1,10 +1,14 @@
 import { NextResponse } from 'next/server';
+import { unstable_noStore as noStore } from 'next/cache';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getDevStorage } from '@/lib/db/devStore';
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+export const fetchCache = 'force-no-store';
 
 export async function GET(request: Request) {
+  noStore();
   try {
     const { searchParams } = new URL(request.url);
     const categoryFilter = searchParams.get('category') || '';
@@ -176,7 +180,11 @@ export async function GET(request: Request) {
       },
       {
         headers: {
-          'Cache-Control': 'no-store, no-cache, must-revalidate',
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+          'CDN-Cache-Control': 'no-store',
+          'Vercel-CDN-Cache-Control': 'no-store',
+          Pragma: 'no-cache',
+          Expires: '0',
         },
       }
     );

@@ -12,13 +12,14 @@ import {
   Clock,
   ShieldCheck,
   CheckCircle2,
-  X
+  X,
+  Mail,
+  Award
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Modal } from '@/components/ui/modal';
-import { maskIdentifier } from '@/lib/utils/normalization';
 
 export default function AttendanceRecordsPage() {
   const [records, setRecords] = useState<any[]>([]);
@@ -26,6 +27,7 @@ export default function AttendanceRecordsPage() {
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
   const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(25);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
 
@@ -38,7 +40,7 @@ export default function AttendanceRecordsPage() {
     try {
       const params = new URLSearchParams({
         page: page.toString(),
-        limit: '15',
+        limit: limit.toString(),
         search: search.trim(),
         category,
         _t: Date.now().toString(),
@@ -73,11 +75,20 @@ export default function AttendanceRecordsPage() {
       window.removeEventListener('focus', onFocus);
       clearInterval(interval);
     };
-  }, [page, category]);
+  }, [page, category, limit]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setPage(1);
+    fetchRecords();
+  };
+
+  const forceCacheClear = () => {
+    if (typeof window !== 'undefined' && 'caches' in window) {
+      caches.keys().then((names) => {
+        names.forEach((name) => caches.delete(name));
+      });
+    }
     fetchRecords();
   };
 
@@ -92,7 +103,7 @@ export default function AttendanceRecordsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={fetchRecords} isLoading={isLoading}>
+          <Button variant="outline" size="sm" onClick={forceCacheClear} isLoading={isLoading}>
             <RefreshCw className="w-3.5 h-3.5 mr-1.5" /> Refresh List
           </Button>
         </div>
@@ -126,6 +137,20 @@ export default function AttendanceRecordsPage() {
               <option value="phd_scholar">PhD Scholars</option>
             </select>
 
+            <select
+              value={limit}
+              onChange={(e) => {
+                setLimit(parseInt(e.target.value, 10));
+                setPage(1);
+              }}
+              className="px-3 py-2 text-xs rounded-md border border-[#E4E9F0] bg-white text-[#182230] focus:outline-none focus:ring-1 focus:ring-[#2864B4]"
+            >
+              <option value="15">15 per page</option>
+              <option value="25">25 per page</option>
+              <option value="50">50 per page</option>
+              <option value="100">100 per page</option>
+            </select>
+
             <Button type="submit" variant="primary" size="sm">
               Search
             </Button>
@@ -143,7 +168,7 @@ export default function AttendanceRecordsPage() {
                   <th className="px-6 py-3 font-semibold">Photo</th>
                   <th className="px-6 py-3 font-semibold">Attendee Name</th>
                   <th className="px-6 py-3 font-semibold">Category</th>
-                  <th className="px-6 py-3 font-semibold">Masked Identifier</th>
+                  <th className="px-6 py-3 font-semibold">Email Address / PhD ID</th>
                   <th className="px-6 py-3 font-semibold">Check-In Time</th>
                   <th className="px-6 py-3 font-semibold">Status</th>
                   <th className="px-6 py-3 font-semibold text-right">Action</th>
@@ -199,9 +224,29 @@ export default function AttendanceRecordsPage() {
                         </Badge>
                       </td>
 
-                      {/* Masked Identifier */}
-                      <td className="px-6 py-3 font-mono text-[#667085]">
-                        {maskIdentifier(r.attendee.identifier, r.attendee.category)}
+                      {/* Email Address & PhD ID */}
+                      <td className="px-6 py-3 text-[#182230]">
+                        <div className="space-y-0.5">
+                          {r.attendee.category === 'guide' ? (
+                            <div className="flex items-center gap-1.5 font-medium text-[#142D4E]">
+                              <Mail className="w-3.5 h-3.5 text-[#2864B4] shrink-0" />
+                              <span>{r.attendee.email || r.attendee.identifier || '—'}</span>
+                            </div>
+                          ) : (
+                            <div className="space-y-0.5">
+                              <div className="flex items-center gap-1.5 font-mono font-semibold text-[#142D4E]">
+                                <Award className="w-3.5 h-3.5 text-[#E65100] shrink-0" />
+                                <span>ID: {r.attendee.phd_id || r.attendee.identifier}</span>
+                              </div>
+                              {r.attendee.email && (
+                                <div className="flex items-center gap-1 text-[11px] text-[#667085]">
+                                  <Mail className="w-3 h-3 text-[#667085] shrink-0" />
+                                  <span>{r.attendee.email}</span>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </td>
 
                       {/* Time */}
@@ -265,17 +310,17 @@ export default function AttendanceRecordsPage() {
         </CardContent>
       </Card>
 
-      {/* Record Details Modal */}
+      {/* Details & Photo Modal */}
       {selectedRecord && (
         <Modal
           isOpen={!!selectedRecord}
           onClose={() => setSelectedRecord(null)}
-          title="Attendance Record Details"
-          maxWidth="lg"
+          title="Verified Attendance Record"
+          maxWidth="md"
         >
-          <div className="space-y-6">
-            {/* Photo Section */}
-            <div className="flex justify-center">
+          <div className="space-y-4">
+            {/* Captured Photograph */}
+            <div className="flex flex-col items-center">
               {selectedRecord.photo?.signed_url && !failedImages[selectedRecord.id] ? (
                 <div className="relative w-64 h-64 rounded-xl overflow-hidden border-2 border-[#142D4E] shadow-sm bg-[#EEF1F5] flex items-center justify-center">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -313,9 +358,17 @@ export default function AttendanceRecordsPage() {
                   {selectedRecord.attendee.category === 'guide' ? 'Registered Email:' : 'PhD ID:'}
                 </span>
                 <span className="font-mono font-semibold text-[#182230]">
-                  {selectedRecord.attendee.identifier}
+                  {selectedRecord.attendee.category === 'guide'
+                    ? (selectedRecord.attendee.email || selectedRecord.attendee.identifier)
+                    : (selectedRecord.attendee.phd_id || selectedRecord.attendee.identifier)}
                 </span>
               </div>
+              {selectedRecord.attendee.category === 'phd_scholar' && selectedRecord.attendee.email && (
+                <div className="flex justify-between border-b border-[#E4E9F0] pb-2">
+                  <span className="text-[#667085]">Scholar Email:</span>
+                  <span className="font-medium text-[#182230]">{selectedRecord.attendee.email}</span>
+                </div>
+              )}
               <div className="flex justify-between border-b border-[#E4E9F0] pb-2">
                 <span className="text-[#667085]">Device Capture Timestamp:</span>
                 <span className="font-mono text-[#182230]">

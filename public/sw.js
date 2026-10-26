@@ -1,5 +1,5 @@
-// MRF Event Attendance Tracker - Service Worker
-const CACHE_NAME = 'mrf-attendance-shell-v1';
+// MRF Event Attendance Tracker - Service Worker v4
+const CACHE_NAME = 'mrf-attendance-shell-v4';
 const PRECACHE_URLS = [
   '/',
   '/kiosk',
@@ -10,6 +10,7 @@ const PRECACHE_URLS = [
 ];
 
 self.addEventListener('install', (event) => {
+  self.skipWaiting();
   event.waitUntil(
     caches
       .open(CACHE_NAME)
@@ -23,15 +24,18 @@ self.addEventListener('install', (event) => {
           )
         );
       })
-      .then(() => self.skipWaiting())
   );
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
+      // Purge all old caches (v1, v2, v3, etc.)
       return Promise.all(
-        keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
+        keys.filter((key) => key !== CACHE_NAME).map((key) => {
+          console.log('[SW] Purging old cache:', key);
+          return caches.delete(key);
+        })
       );
     }).then(() => self.clients.claim())
   );
@@ -41,51 +45,58 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // DO NOT cache API requests, photo storage or dynamic mutation routes
+  // STRICTLY BYPASS:
+  // 1. All Admin routes (/admin/*)
+  // 2. All API routes (/api/*)
+  // 3. All Auth routes (/auth/*)
+  // 4. Supabase cloud endpoints
+  // 5. Next.js App Router RSC data payloads (_rsc, RSC header, Next-Router headers)
+  // 6. Any non-GET request
   if (
-    url.pathname.startsWith('/api/') ||
-    url.pathname.startsWith('/auth/') ||
+    request.method !== 'GET' ||
+    url.pathname.startsWith('/admin') ||
+    url.pathname.startsWith('/api') ||
+    url.pathname.startsWith('/auth') ||
     url.hostname.includes('supabase.co') ||
-    request.method !== 'GET'
+    url.searchParams.has('_rsc') ||
+    request.headers.get('RSC') === '1' ||
+    request.headers.get('Next-Router-State-Tree') ||
+    request.headers.get('Next-Router-Prefetch')
   ) {
+    return; // Pass through to network with 0 overhead and 0 caching
+  }
+
+  // Handle KIOSK offline navigation
+  if (request.mode === 'navigate') {
+    if (url.pathname.startsWith('/kiosk') || url.pathname === '/' || url.pathname === '/offline') {
+      event.respondWith(
+        fetch(request).catch(async () => {
+          const cachedResponse = await caches.match(request);
+          if (cachedResponse) return cachedResponse;
+          return caches.match('/offline') || caches.match('/kiosk');
+        })
+      );
+    }
     return;
   }
 
-  // Network-first with fallback to cache for HTML navigation, cache-first for static assets
-  if (request.mode === 'navigate') {
+  // Only cache immutable static assets (_next/static/, favicon, manifest)
+  if (
+    url.pathname.startsWith('/_next/static/') ||
+    url.pathname === '/favicon.ico' ||
+    url.pathname === '/manifest.json'
+  ) {
     event.respondWith(
-      fetch(request).catch(async () => {
-        const cachedResponse = await caches.match(request);
+      caches.match(request).then((cachedResponse) => {
         if (cachedResponse) return cachedResponse;
-        return caches.match('/offline') || caches.match('/kiosk');
+        return fetch(request).then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const clone = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+          }
+          return networkResponse;
+        });
       })
     );
-    return;
   }
-
-  // Static assets (CSS, JS, images, fonts)
-  event.respondWith(
-    caches.match(request).then((cachedResponse) => {
-      if (cachedResponse) {
-        // Fetch in background to revalidate cache
-        fetch(request).then((networkResponse) => {
-          if (networkResponse && networkResponse.status === 200) {
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, networkResponse));
-          }
-        }).catch(() => {});
-        return cachedResponse;
-      }
-
-      return fetch(request).then((networkResponse) => {
-        if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
-          return networkResponse;
-        }
-        const responseToCache = networkResponse.clone();
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(request, responseToCache);
-        });
-        return networkResponse;
-      });
-    })
-  );
 });

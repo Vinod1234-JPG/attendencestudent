@@ -49,18 +49,14 @@ export default function AdminDashboardPage() {
   const fetchStats = async () => {
     setIsLoading(true);
     try {
-      // 1. Fetch recent attendance records
-      const res = await fetch(`/api/attendance?limit=5&_t=${Date.now()}`, {
-        cache: 'no-store',
-      });
-      const data = await res.json();
-      const recent = data.records || [];
+      // Fetch recent attendance and registry statistics in parallel for instant speed
+      const [recRes, attRes] = await Promise.all([
+        fetch(`/api/attendance?limit=5&_t=${Date.now()}`, { cache: 'no-store' }),
+        fetch(`/api/admin/attendees?_t=${Date.now()}`, { cache: 'no-store' }),
+      ]);
 
-      // 2. Fetch registry statistics from attendees directory
-      const attRes = await fetch(`/api/admin/attendees?_t=${Date.now()}`, {
-        cache: 'no-store',
-      });
-      const attData = await attRes.json();
+      const [data, attData] = await Promise.all([recRes.json(), attRes.json()]);
+      const recent = data?.records || [];
 
       const totalGuides = attData.counts?.guides || 0;
       const totalScholars = attData.counts?.scholars || 0;

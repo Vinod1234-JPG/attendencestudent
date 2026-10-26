@@ -1,10 +1,14 @@
 import { NextResponse } from 'next/server';
+import { unstable_noStore as noStore } from 'next/cache';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getDevStorage } from '@/lib/db/devStore';
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+export const fetchCache = 'force-no-store';
 
 export async function GET(request: Request) {
+  noStore();
   try {
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search') || '';
@@ -125,6 +129,15 @@ export async function GET(request: Request) {
         photoSignedUrl = `/api/attendance/photo?key=${encodeURIComponent(photo.storage_object_key)}`;
       }
 
+      // Extract best email if available
+      let email = rec.people.normalized_email;
+      if (!email && rec.people.metadata) {
+        email = rec.people.metadata.Email || rec.people.metadata.email || rec.people.metadata['Email ID'] || null;
+      }
+      if (!email && rec.people.phd_id && rec.people.phd_id.includes('@')) {
+        email = rec.people.phd_id.toLowerCase();
+      }
+
       return {
         id: rec.id,
         operation_id: rec.operation_id,
@@ -136,10 +149,12 @@ export async function GET(request: Request) {
           id: rec.people.id,
           name: rec.people.name,
           category: rec.people.category,
+          email: email || null,
+          phd_id: rec.people.phd_id || null,
           identifier:
             rec.people.category === 'guide'
-              ? rec.people.normalized_email
-              : rec.people.phd_id,
+              ? (email || rec.people.normalized_email || '—')
+              : (rec.people.phd_id || '—'),
           extra_details: rec.people.metadata || {},
         },
         photo: {
@@ -164,7 +179,9 @@ export async function GET(request: Request) {
       },
       {
         headers: {
-          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+          'CDN-Cache-Control': 'no-store',
+          'Vercel-CDN-Cache-Control': 'no-store',
           Pragma: 'no-cache',
           Expires: '0',
         },
