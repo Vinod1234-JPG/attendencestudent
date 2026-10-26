@@ -50,10 +50,14 @@ export default function AdminDashboardPage() {
     setIsLoading(true);
     try {
       // Fetch attendance records and registered people counts
-      const res = await fetch('/api/attendance?limit=5');
+      const res = await fetch(`/api/attendance?limit=5&_t=${Date.now()}`, {
+        cache: 'no-store',
+      });
       const data = await res.json();
 
-      const prepRes = await fetch('/api/kiosk/prep-offline');
+      const prepRes = await fetch(`/api/kiosk/prep-offline?_t=${Date.now()}`, {
+        cache: 'no-store',
+      });
       const prepData = await prepRes.json();
 
       const totalGuides = prepData.counts?.guides || 0;

@@ -37,16 +37,25 @@ export async function GET(request: Request) {
       const total = records.length;
       const paginated = records.slice(offset, offset + limit);
 
-      return NextResponse.json({
-        success: true,
-        records: paginated,
-        pagination: {
-          page,
-          limit,
-          total,
-          total_pages: Math.ceil(total / limit) || 1,
+      return NextResponse.json(
+        {
+          success: true,
+          records: paginated,
+          pagination: {
+            page,
+            limit,
+            total,
+            total_pages: Math.ceil(total / limit) || 1,
+          },
         },
-      });
+        {
+          headers: {
+            'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+            Pragma: 'no-cache',
+            Expires: '0',
+          },
+        }
+      );
     }
 
     const admin = createAdminClient();
@@ -105,65 +114,62 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    // Generate short-lived signed URLs for photographs
-    const recordsWithSignedPhotos = await Promise.all(
-      (records || []).map(async (rec: any) => {
-        let photoSignedUrl = null;
-        const photo = Array.isArray(rec.attendance_photos)
-          ? rec.attendance_photos[0]
-          : rec.attendance_photos;
+    // Generate reliable app-proxied URLs for photographs so they never expire with JWT errors
+    const recordsWithSignedPhotos = (records || []).map((rec: any) => {
+      let photoSignedUrl = null;
+      const photo = Array.isArray(rec.attendance_photos)
+        ? rec.attendance_photos[0]
+        : rec.attendance_photos;
 
-        if (photo && photo.storage_object_key) {
-          try {
-            const { data: signed } = await admin.storage
-              .from('mrf-attendance-photos')
-              .createSignedUrl(photo.storage_object_key, 600); // 10 minutes
+      if (photo && photo.storage_object_key) {
+        photoSignedUrl = `/api/attendance/photo?key=${encodeURIComponent(photo.storage_object_key)}`;
+      }
 
-            if (signed?.signedUrl) {
-              photoSignedUrl = signed.signedUrl;
-            }
-          } catch (e) {
-            console.warn('Failed to sign photo url:', e);
-          }
-        }
-
-        return {
-          id: rec.id,
-          operation_id: rec.operation_id,
-          captured_at_device: rec.captured_at_device,
-          received_at_server: rec.received_at_server,
-          status: rec.status,
-          session_name: rec.event_sessions?.name || 'Main Session',
-          attendee: {
-            id: rec.people.id,
-            name: rec.people.name,
-            category: rec.people.category,
-            identifier:
-              rec.people.category === 'guide'
-                ? rec.people.normalized_email
-                : rec.people.phd_id,
-            extra_details: rec.people.metadata || {},
-          },
-          photo: {
-            available: !!photoSignedUrl,
-            signed_url: photoSignedUrl,
-            file_size: photo?.file_size || 0,
-            content_type: photo?.content_type || 'image/jpeg',
-          },
-        };
-      })
-    );
-
-    return NextResponse.json({
-      success: true,
-      records: recordsWithSignedPhotos,
-      pagination: {
-        page,
-        limit,
-        total: count || 0,
-        total_pages: Math.ceil((count || 0) / limit),
-      },
+      return {
+        id: rec.id,
+        operation_id: rec.operation_id,
+        captured_at_device: rec.captured_at_device,
+        received_at_server: rec.received_at_server,
+        status: rec.status,
+        session_name: rec.event_sessions?.name || 'Main Session',
+        attendee: {
+          id: rec.people.id,
+          name: rec.people.name,
+          category: rec.people.category,
+          identifier:
+            rec.people.category === 'guide'
+              ? rec.people.normalized_email
+              : rec.people.phd_id,
+          extra_details: rec.people.metadata || {},
+        },
+        photo: {
+          available: !!photoSignedUrl,
+          signed_url: photoSignedUrl,
+          file_size: photo?.file_size || 0,
+          content_type: photo?.content_type || 'image/jpeg',
+        },
+      };
     });
+
+    return NextResponse.json(
+      {
+        success: true,
+        records: recordsWithSignedPhotos,
+        pagination: {
+          page,
+          limit,
+          total: count || 0,
+          total_pages: Math.ceil((count || 0) / limit) || 1,
+        },
+      },
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+          Pragma: 'no-cache',
+          Expires: '0',
+        },
+      }
+    );
   } catch (err: any) {
     console.error('Attendance GET exception:', err);
     return NextResponse.json({ error: err.message }, { status: 500 });

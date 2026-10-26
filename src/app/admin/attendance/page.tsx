@@ -31,6 +31,7 @@ export default function AttendanceRecordsPage() {
 
   // Selected record for details modal
   const [selectedRecord, setSelectedRecord] = useState<any | null>(null);
+  const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
 
   const fetchRecords = async () => {
     setIsLoading(true);
@@ -40,9 +41,12 @@ export default function AttendanceRecordsPage() {
         limit: '15',
         search: search.trim(),
         category,
+        _t: Date.now().toString(),
       });
 
-      const res = await fetch(`/api/attendance?${params.toString()}`);
+      const res = await fetch(`/api/attendance?${params.toString()}`, {
+        cache: 'no-store',
+      });
       const data = await res.json();
 
       if (res.ok && data.success) {
@@ -154,17 +158,20 @@ export default function AttendanceRecordsPage() {
                     <tr key={r.id} className="hover:bg-[#F7F9FC]/70 transition-colors">
                       {/* Photo Thumbnail */}
                       <td className="px-6 py-3">
-                        {r.photo?.signed_url ? (
-                          <div className="w-10 h-10 rounded-md overflow-hidden bg-black border border-[#CBD5E1]">
+                        {r.photo?.signed_url && !failedImages[r.id] ? (
+                          <div className="w-10 h-10 rounded-md overflow-hidden bg-[#EEF1F5] border border-[#CBD5E1]">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
                               src={r.photo.signed_url}
                               alt={r.attendee.name}
                               className="w-full h-full object-cover"
+                              onError={() =>
+                                setFailedImages((prev) => ({ ...prev, [r.id]: true }))
+                              }
                             />
                           </div>
                         ) : (
-                          <div className="w-10 h-10 rounded-md bg-[#EEF1F5] flex items-center justify-center text-[#667085]">
+                          <div className="w-10 h-10 rounded-md bg-[#EEF1F5] flex items-center justify-center text-[#667085] border border-[#E4E9F0]">
                             <Camera className="w-4 h-4" />
                           </div>
                         )}
@@ -259,13 +266,16 @@ export default function AttendanceRecordsPage() {
           <div className="space-y-6">
             {/* Photo Section */}
             <div className="flex justify-center">
-              {selectedRecord.photo?.signed_url ? (
-                <div className="relative w-64 h-64 rounded-xl overflow-hidden border-2 border-[#142D4E] shadow-sm bg-black">
+              {selectedRecord.photo?.signed_url && !failedImages[selectedRecord.id] ? (
+                <div className="relative w-64 h-64 rounded-xl overflow-hidden border-2 border-[#142D4E] shadow-sm bg-[#EEF1F5] flex items-center justify-center">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={selectedRecord.photo.signed_url}
                     alt={selectedRecord.attendee.name}
                     className="w-full h-full object-cover"
+                    onError={() =>
+                      setFailedImages((prev) => ({ ...prev, [selectedRecord.id]: true }))
+                    }
                   />
                 </div>
               ) : (
