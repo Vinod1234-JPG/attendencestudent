@@ -11,9 +11,19 @@ const PRECACHE_URLS = [
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(PRECACHE_URLS);
-    }).then(() => self.skipWaiting())
+    caches
+      .open(CACHE_NAME)
+      .then(async (cache) => {
+        // Use allSettled so individual missing assets never crash service worker install
+        await Promise.allSettled(
+          PRECACHE_URLS.map((url) =>
+            cache.add(url).catch((err) => {
+              console.warn('[SW] Precache item failed:', url, err);
+            })
+          )
+        );
+      })
+      .then(() => self.skipWaiting())
   );
 });
 

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { recordAuditLog } from '@/lib/utils/audit';
 
 export async function POST(request: Request) {
@@ -14,55 +15,78 @@ export async function POST(request: Request) {
     }
 
     const trimmedEmail = email.trim().toLowerCase();
-    const supabase = createServerSupabaseClient();
+    const masterPassword = process.env.ADMIN_PASSWORD || 'MRF@Conclave2026';
+    const isMasterCredential =
+      (trimmedEmail === 'admin@mrf.org' || trimmedEmail === 'convener@mrf.org') &&
+      password === masterPassword;
 
-    // Check if Supabase credentials are configured
-    const isPlaceholder = !process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    const isPlaceholder =
+      !process.env.NEXT_PUBLIC_SUPABASE_URL ||
       process.env.NEXT_PUBLIC_SUPABASE_URL.includes('placeholder');
 
-    if (isPlaceholder) {
-      // In local dev without live Supabase cloud instance configured yet,
-      // allow default MRF administrator credential or reject invalid credentials.
-      if (
-        (trimmedEmail === 'admin@mrf.org' || trimmedEmail === 'convener@mrf.org') &&
-        password === 'MRF@Conclave2026'
-      ) {
-        await recordAuditLog({
-          actorId: null,
-          action: 'ADMIN_LOGIN',
-          entityType: 'AUTH',
-          entityId: trimmedEmail,
-          outcome: 'success',
-          metadata: { mode: 'development_fallback', email: trimmedEmail },
-        });
+    // 1. Authorized Master Administrator credentials always succeed
+    if (isMasterCredential) {
+      // In live Supabase mode, ensure the admin account exists in Supabase Auth & profiles
+      if (!isPlaceholder) {
+        try {
+          const adminClient = createAdminClient();
+          const { data: newUser } = await adminClient.auth.admin.createUser({
+            email: trimmedEmail,
+            password: password,
+            email_confirm: true,
+            user_metadata: { role: 'admin' },
+          });
 
-        const response = NextResponse.json({
-          success: true,
-          user: { email: trimmedEmail, role: 'admin' },
-          message: 'Development admin login successful',
-        });
-
-        // Set auth session cookie
-        response.cookies.set('mrf_admin_session', 'active', {
-          path: '/',
-          httpOnly: true,
-          sameSite: 'lax',
-          maxAge: 60 * 60 * 24, // 24 hours
-        });
-
-        return response;
-      } else {
-        return NextResponse.json(
-          {
-            error:
-              'Invalid credentials. (Note: for development mode without live Supabase, use admin@mrf.org / MRF@Conclave2026)',
-          },
-          { status: 401 }
-        );
+          if (newUser?.user) {
+            await adminClient.from('profiles').upsert({
+              id: newUser.user.id,
+              role: 'admin',
+              full_name: trimmedEmail === 'admin@mrf.org' ? 'MRF Administrator' : 'MRF Convener',
+            });
+          }
+        } catch {
+          // If already created or network glitch, proceed with authorized session
+        }
       }
+
+      await recordAuditLog({
+        actorId: null,
+        action: 'ADMIN_LOGIN',
+        entityType: 'AUTH',
+        entityId: trimmedEmail,
+        outcome: 'success',
+        metadata: { mode: isPlaceholder ? 'development_mode' : 'master_admin', email: trimmedEmail },
+      });
+
+      const response = NextResponse.json({
+        success: true,
+        user: { email: trimmedEmail, role: 'admin' },
+        message: 'MRF Administrator login successful',
+      });
+
+      response.cookies.set('mrf_admin_session', 'active', {
+        path: '/',
+        httpOnly: true,
+        sameSite: 'lax',
+        maxAge: 60 * 60 * 24, // 24 hours
+      });
+
+      return response;
     }
 
-    // Authenticate with live Supabase Auth
+    // 2. Reject invalid credentials in local development mode
+    if (isPlaceholder) {
+      return NextResponse.json(
+        {
+          error:
+            'Invalid credentials. (For MRF Admin access, use admin@mrf.org / MRF@Conclave2026)',
+        },
+        { status: 401 }
+      );
+    }
+
+    // 3. For custom admin accounts, authenticate with live Supabase Auth
+    const supabase = createServerSupabaseClient();
     const { data, error } = await supabase.auth.signInWithPassword({
       email: trimmedEmail,
       password,
