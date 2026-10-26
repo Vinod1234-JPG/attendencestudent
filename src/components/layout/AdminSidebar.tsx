@@ -14,7 +14,8 @@ import {
   History,
   LogOut,
   Shield,
-  GraduationCap
+  GraduationCap,
+  Users
 } from 'lucide-react';
 
 interface AdminSidebarProps {
@@ -41,6 +42,7 @@ export function AdminSidebar({
 
   const navItems = [
     { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
+    { label: 'Registered Attendees', href: '/admin/attendees', icon: Users },
     { label: 'Take Attendance', href: '/kiosk', icon: QrCode, isExternal: true },
     { label: 'Upload MRF Data', href: '/admin/import', icon: Upload },
     { label: 'Attendance Records', href: '/admin/attendance', icon: ClipboardList },

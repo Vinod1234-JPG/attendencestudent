@@ -103,10 +103,9 @@ export async function GET() {
     }
 
     // 3. Fetch all registered people (Guides and PhD Scholars)
-    const { data: people, error: peopleErr } = await admin
+    const { data: peopleRaw, error: peopleErr } = await admin
       .from('people')
-      .select('id, category, name, normalized_email, phd_id')
-      .order('name', { ascending: true });
+      .select('*');
 
     if (peopleErr) {
       return NextResponse.json(
@@ -114,6 +113,10 @@ export async function GET() {
         { status: 500 }
       );
     }
+
+    const people = (peopleRaw || []).sort((a: any, b: any) =>
+      (a.name || '').localeCompare(b.name || '')
+    );
 
     const guideCount = people.filter((p) => p.category === 'guide').length;
     const scholarCount = people.filter((p) => p.category === 'phd_scholar').length;

@@ -126,9 +126,9 @@ export async function POST(request: Request) {
     if (category === 'guide') {
       const { data, error } = await admin
         .from('people')
-        .select('id, name, category, normalized_email')
+        .select('id, name, category, normalized_email, metadata')
         .eq('category', 'guide')
-        .eq('normalized_email', normalized)
+        .ilike('normalized_email', normalized)
         .maybeSingle();
 
       if (error || !data) {
@@ -142,24 +142,43 @@ export async function POST(request: Request) {
       }
       person = data;
     } else {
-      // PhD Scholar
-      const { data, error } = await admin
+      // PhD Scholar: allow lookup by PhD ID (case-insensitive) or email
+      let scholarQuery = admin
         .from('people')
-        .select('id, name, category, phd_id')
-        .eq('category', 'phd_scholar')
-        .eq('phd_id', normalized)
+        .select('id, name, category, phd_id, normalized_email, metadata')
+        .eq('category', 'phd_scholar');
+
+      // Try exact / case-insensitive match on phd_id
+      const { data: byPhdId } = await scholarQuery
+        .ilike('phd_id', normalized)
         .maybeSingle();
 
-      if (error || !data) {
+      if (byPhdId) {
+        person = byPhdId;
+      } else {
+        // Also check if entered without leading zeros or with email
+        const { data: byAlt } = await admin
+          .from('people')
+          .select('id, name, category, phd_id, normalized_email, metadata')
+          .eq('category', 'phd_scholar')
+          .or(`phd_id.ilike.%${identifier.trim()}%,normalized_email.ilike.%${identifier.trim()}%`)
+          .limit(1)
+          .maybeSingle();
+
+        if (byAlt) {
+          person = byAlt;
+        }
+      }
+
+      if (!person) {
         return NextResponse.json(
           {
             error:
-              'Official PhD ID not found. Please check your MRF PhD ID or contact the registration desk.',
+              'Official PhD ID or email not found. Please check your MRF PhD ID or contact the registration desk.',
           },
           { status: 404 }
         );
       }
-      person = data;
     }
 
     // 3. Check for existing attendance in this session (duplicate prevention)

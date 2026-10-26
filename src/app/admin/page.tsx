@@ -49,27 +49,25 @@ export default function AdminDashboardPage() {
   const fetchStats = async () => {
     setIsLoading(true);
     try {
-      // Fetch attendance records and registered people counts
+      // 1. Fetch recent attendance records
       const res = await fetch(`/api/attendance?limit=5&_t=${Date.now()}`, {
         cache: 'no-store',
       });
       const data = await res.json();
-
-      const prepRes = await fetch(`/api/kiosk/prep-offline?_t=${Date.now()}`, {
-        cache: 'no-store',
-      });
-      const prepData = await prepRes.json();
-
-      const totalGuides = prepData.counts?.guides || 0;
-      const totalScholars = prepData.counts?.scholars || 0;
-      const totalReg = totalGuides + totalScholars;
-
-      const totalAttended = data.pagination?.total || 0;
       const recent = data.records || [];
 
-      // Calculate category attended counts from recent or full data
-      const guidesAttended = recent.filter((r: any) => r.attendee?.category === 'guide').length;
-      const scholarsAttended = recent.filter((r: any) => r.attendee?.category === 'phd_scholar').length;
+      // 2. Fetch registry statistics from attendees directory
+      const attRes = await fetch(`/api/admin/attendees?_t=${Date.now()}`, {
+        cache: 'no-store',
+      });
+      const attData = await attRes.json();
+
+      const totalGuides = attData.counts?.guides || 0;
+      const totalScholars = attData.counts?.scholars || 0;
+      const totalReg = attData.counts?.total || totalGuides + totalScholars;
+      const totalAttended = attData.counts?.attended || data.pagination?.total || 0;
+      const guidesAttended = attData.counts?.attendedGuides ?? 0;
+      const scholarsAttended = attData.counts?.attendedScholars ?? 0;
 
       const pending = Math.max(0, totalReg - totalAttended);
       const pct = totalReg > 0 ? Math.round((totalAttended / totalReg) * 100) : 0;
@@ -138,18 +136,20 @@ export default function AdminDashboardPage() {
 
       {/* Summary Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-5">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-[#667085]">Total Registered</span>
-              <Users className="w-4 h-4 text-[#2864B4]" />
-            </div>
-            <p className="text-2xl font-bold text-[#142D4E] mt-2">{stats.totalRegistered}</p>
-            <p className="text-[11px] text-[#667085] mt-1">
-              {stats.totalGuidesRegistered} Guides • {stats.totalScholarsRegistered} Scholars
-            </p>
-          </CardContent>
-        </Card>
+        <Link href="/admin/attendees">
+          <Card className="hover:border-[#2864B4] transition-colors cursor-pointer">
+            <CardContent className="p-5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-[#667085]">Total Registered</span>
+                <Users className="w-4 h-4 text-[#2864B4]" />
+              </div>
+              <p className="text-2xl font-bold text-[#142D4E] mt-2">{stats.totalRegistered}</p>
+              <p className="text-[11px] text-[#2864B4] font-medium mt-1">
+                {stats.totalGuidesRegistered} Guides • {stats.totalScholarsRegistered} Scholars (View Registry →)
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
 
         <Card>
           <CardContent className="p-5">
