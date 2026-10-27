@@ -49,6 +49,7 @@ export function isValidPhdId(id: string | null | undefined): boolean {
 
 /**
  * Masks an identifier for privacy on public or confirmation screens.
+ * Short identifiers (<= 4 characters) are preserved as-is.
  * Guide: "j****@domain.com"
  * PhD ID: "MRF-***-042"
  */
@@ -56,7 +57,7 @@ export function maskIdentifier(identifier: string, category: 'guide' | 'phd_scho
   if (!identifier) return '';
   if (category === 'guide') {
     const parts = identifier.split('@');
-    if (parts.length !== 2) return '****';
+    if (parts.length !== 2) return identifier;
     const [user, domain] = parts;
     if (user.length <= 2) {
       return `${user[0]}***@${domain}`;
@@ -65,7 +66,7 @@ export function maskIdentifier(identifier: string, category: 'guide' | 'phd_scho
   } else {
     // PhD ID
     const clean = identifier.trim();
-    if (clean.length <= 4) return '****';
+    if (clean.length <= 4) return clean; // Do not hide short IDs into ****
     const prefix = clean.slice(0, 2);
     const suffix = clean.slice(-2);
     return `${prefix}***${suffix}`;

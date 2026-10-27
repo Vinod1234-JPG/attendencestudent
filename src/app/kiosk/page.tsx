@@ -264,6 +264,11 @@ export default function KioskPage() {
           startAutoResetTimer();
           setIsLoading(false);
           return;
+        } else {
+          setErrorMessage(data.error || 'Server rejected attendance submission.');
+          setStep('CONFIRM_DETAILS');
+          setIsLoading(false);
+          return;
         }
       } catch (submitErr) {
         console.warn('Network submit failed; storing in offline queue:', submitErr);
@@ -570,7 +575,7 @@ export default function KioskPage() {
                   <div className="flex justify-between border-b border-[#E4E9F0] pb-2">
                     <span className="text-[#667085] font-medium">Identifier:</span>
                     <span className="font-mono font-semibold text-[#182230]">
-                      {attendee.masked_identifier}
+                      {attendee.category === 'guide' ? attendee.identifier : `ID: ${attendee.identifier}`}
                     </span>
                   </div>
 
@@ -709,3 +714,4 @@ export default function KioskPage() {
     </div>
   );
 }
+
