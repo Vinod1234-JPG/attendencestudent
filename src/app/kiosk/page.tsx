@@ -247,7 +247,7 @@ export default function KioskPage() {
 
   // STEP 3: Confirm and Persist Attendance
   const handleConfirmAndSubmit = async () => {
-    if (!attendee || !capturedBlob) return;
+    if (!attendee || !capturedBlob || isLoading) return;
 
     setStep('SAVING');
     setIsLoading(true);

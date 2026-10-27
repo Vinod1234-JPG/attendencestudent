@@ -161,6 +161,34 @@ export async function POST(request: Request) {
       .single();
 
     if (insertErr || !record) {
+      if (
+        insertErr?.code === '23505' ||
+        insertErr?.message?.includes('duplicate key') ||
+        insertErr?.message?.includes('uq_session_person')
+      ) {
+        await admin.from('sync_conflicts').insert({
+          operation_id: operationId,
+          session_id: sessionId,
+          person_id: personId,
+          conflict_type: 'duplicate_submission',
+          client_captured_at: capturedAtDevice,
+          server_received_at: nowIso,
+          status: 'pending_review',
+          metadata: {
+            incomingCapturedAt: capturedAtDevice,
+            category,
+            identifier,
+            reason: 'Concurrent insert duplicate caught by database unique constraint',
+          },
+        });
+        return NextResponse.json(
+          {
+            conflict: true,
+            message: 'Attendance was already recorded by another system. Marked as duplicate.',
+          },
+          { status: 409 }
+        );
+      }
       console.error('Sync insert failure:', insertErr);
       return NextResponse.json(
         { error: 'Database error storing synchronized attendance record.' },

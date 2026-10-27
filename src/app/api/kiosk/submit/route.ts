@@ -189,6 +189,21 @@ export async function POST(request: Request) {
       .single();
 
     if (insertErr || !newRecord) {
+      // Handle PostgreSQL 23505: Unique constraint violation (Race condition across multiple kiosks)
+      if (
+        insertErr?.code === '23505' ||
+        insertErr?.message?.includes('duplicate key') ||
+        insertErr?.message?.includes('uq_session_person')
+      ) {
+        return NextResponse.json(
+          {
+            error: `Attendance has already been recorded for ${person.name} on another system. Duplicate entries are not permitted.`,
+            duplicate: true,
+          },
+          { status: 409 }
+        );
+      }
+
       console.error('Attendance insert error:', insertErr);
       return NextResponse.json(
         { error: 'Failed to record attendance in database.' },
