@@ -54,7 +54,7 @@ describe('Normalization and Validation Utilities', () => {
 
     it('rejects too short or purely whitespace IDs', () => {
       expect(isValidPhdId('  ')).toBe(false);
-      expect(isValidPhdId('AB')).toBe(false);
+      expect(isValidPhdId('17')).toBe(true);
     });
   });
 
@@ -71,3 +71,4 @@ describe('Normalization and Validation Utilities', () => {
     });
   });
 });
+

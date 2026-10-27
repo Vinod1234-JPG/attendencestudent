@@ -31,20 +31,20 @@ export function isValidEmail(email: string | null | undefined): boolean {
 export function normalizePhdId(id: string | null | undefined): string {
   if (!id) return '';
   // Trim outer whitespace, replace multiple whitespace with single space, and capitalize standard alphanumeric codes
-  const trimmed = id.trim();
+  const trimmed = String(id).trim();
   // Standardize hyphens/slashes while preserving leading zeros
   return trimmed.replace(/\s+/g, ' ').toUpperCase();
 }
 
 /**
  * Validates an official MRF PhD ID.
- * Must be at least 3 non-whitespace characters and not contain forbidden characters.
+ * Must contain at least one alphanumeric character.
  */
 export function isValidPhdId(id: string | null | undefined): boolean {
   if (!id) return false;
-  const normalized = normalizePhdId(id);
-  // Ensure it has at least 3 characters and contains alphanumeric characters
-  return normalized.length >= 3 && /[A-Z0-9]/.test(normalized);
+  const normalized = normalizePhdId(String(id));
+  // Ensure it has at least 1 character and contains alphanumeric characters
+  return normalized.length >= 1 && /[A-Z0-9]/.test(normalized);
 }
 
 /**

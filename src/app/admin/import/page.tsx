@@ -466,6 +466,8 @@ export default function ImportPage() {
                   ) : (
                     displayedRows.map((row, idx) => {
                       const originalIdx = parsedRows.indexOf(row);
+                      const rowNum = originalIdx !== -1 ? originalIdx + 1 : idx + 1;
+                      const invalidItem = invalidRows.find((inv) => inv.rowNumber === rowNum);
                       return (
                         <tr key={idx} className="hover:bg-[#F7F9FC]/70 transition-colors">
                           <td className="px-4 py-2 text-[#667085] font-mono">
@@ -477,7 +479,7 @@ export default function ImportPage() {
                             </td>
                           ))}
                           <td className="px-4 py-2">
-                            <Badge variant="success">Ready</Badge>
+                            {invalidItem ? (<Badge variant="error">{invalidItem.reason}</Badge>) : (<Badge variant="success">Ready</Badge>)}
                           </td>
                         </tr>
                       );
@@ -557,4 +559,5 @@ export default function ImportPage() {
     </div>
   );
 }
+
 
