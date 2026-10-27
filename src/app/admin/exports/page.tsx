@@ -239,7 +239,7 @@ NOTE: These records represent attendance captured locally on this hardware devic
             <div className="flex items-center justify-between p-3 bg-[#F7F9FC] border border-[#E4E9F0] rounded-lg">
               <div>
                 <p className="text-xs font-bold text-[#182230]">Combined Attendance (Excel)</p>
-                <p className="text-[11px] text-[#667085]">Full official conclave attendance workbook</p>
+                <p className="text-[11px] text-[#667085]">Full official research retreat attendance workbook</p>
               </div>
               <Button
                 variant="primary"

@@ -234,8 +234,8 @@ export default function KioskPage() {
         identifier: normalized,
         masked_identifier: maskIdentifier(normalized, category),
         session_id: session?.id || 'dev-session-1',
-        session_name: session?.name || 'General Conclave Check-in Session',
-        event_name: event?.name || 'MRF Annual Research Conclave 2026',
+        session_name: session?.name || 'General Retreat Check-in Session',
+        event_name: event?.name || 'MRF Research Retreat',
       });
       setStep('CONFIRM_DETAILS');
     } catch (offlineErr: any) {

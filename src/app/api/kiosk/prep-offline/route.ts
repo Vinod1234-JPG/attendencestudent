@@ -47,7 +47,7 @@ export async function GET() {
         generated_at: new Date().toISOString(),
         event: {
           id: 'dev-event-1',
-          name: 'MRF Annual Research Conclave 2026',
+          name: 'MRF Research Retreat',
           event_date: '2026-10-24',
           timezone: 'Asia/Kolkata',
           status: 'active',
@@ -57,7 +57,7 @@ export async function GET() {
         session: {
           id: 'dev-session-1',
           event_id: 'dev-event-1',
-          name: 'General Conclave Check-in Session',
+          name: 'General Retreat Check-in Session',
           status: 'open',
           opens_at: new Date().toISOString(),
           closes_at: null,

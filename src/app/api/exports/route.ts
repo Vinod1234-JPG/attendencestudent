@@ -80,7 +80,7 @@ export async function GET(request: Request) {
         'Attendee Name': sanitizeCell(p.name),
         Category: p.category === 'guide' ? 'Guide' : 'PhD Scholar',
         'Registered Identifier': sanitizeCell(p.category === 'guide' ? p.normalized_email : p.phd_id),
-        'Event Name': sanitizeCell(r.event_sessions?.events?.name || 'MRF Conclave'),
+        'Event Name': sanitizeCell(r.event_sessions?.events?.name || 'MRF Research Retreat'),
         'Session Name': sanitizeCell(r.event_sessions?.name || 'General Session'),
         'Local Capture Time (ISO)': sanitizeCell(r.captured_at_device),
         'Server Receipt Time (ISO)': sanitizeCell(r.received_at_server),

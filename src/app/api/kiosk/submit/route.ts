@@ -49,7 +49,7 @@ export async function POST(request: Request) {
         captured_at_device: capturedAtDevice || nowIso,
         received_at_server: nowIso,
         status: 'confirmed',
-        session_name: 'General Conclave Check-in Session',
+        session_name: 'General Retreat Check-in Session',
         attendee: {
           id: personId,
           name: person?.name || attendeeName,

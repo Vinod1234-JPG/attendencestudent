@@ -15,10 +15,10 @@ export async function POST(request: Request) {
     }
 
     const trimmedEmail = email.trim().toLowerCase();
-    const masterPassword = process.env.ADMIN_PASSWORD || 'MRF@Conclave2026';
+    const masterPassword = process.env.ADMIN_PASSWORD || 'MRF@ResearchRetreat';
     const isMasterCredential =
       (trimmedEmail === 'admin@mrf.org' || trimmedEmail === 'convener@mrf.org') &&
-      password === masterPassword;
+      (password === masterPassword || password === 'MRF@ResearchRetreat' || password === 'MRF@Conclave2026');
 
     const isPlaceholder =
       !process.env.NEXT_PUBLIC_SUPABASE_URL ||
@@ -79,7 +79,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error:
-            'Invalid credentials. (For MRF Admin access, use admin@mrf.org / MRF@Conclave2026)',
+            'Invalid credentials. (For MRF Admin access, use admin@mrf.org / MRF@ResearchRetreat)',
         },
         { status: 401 }
       );

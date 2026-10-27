@@ -93,11 +93,11 @@ export async function POST(request: Request) {
         },
         event: {
           id: 'dev-event-1',
-          name: 'MRF Annual Research Conclave 2026',
+          name: 'MRF Research Retreat',
         },
         session: {
           id: 'dev-session-1',
-          name: 'General Conclave Check-in Session',
+          name: 'General Retreat Check-in Session',
         },
         already_attended: alreadyAttended,
         existing_record: null,

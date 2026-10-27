@@ -43,7 +43,7 @@ export default function HomePage() {
         <div className="max-w-4xl w-full text-center space-y-8">
           <div>
             <span className="inline-block px-3.5 py-1 rounded-full text-xs font-semibold bg-[#EAF2FC] text-[#2864B4] mb-3">
-              MRF Conclave 2026 Attendance System
+              MRF Research Retreat Attendance System
             </span>
             <h2 className="text-3xl md:text-5xl font-extrabold text-[#142D4E] tracking-tight leading-tight">
               MRF Event Attendance Tracker

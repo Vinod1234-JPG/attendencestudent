@@ -12,11 +12,23 @@ interface AdminTopBarProps {
 
 export function AdminTopBar({
   title = 'Overview',
-  eventName = 'MRF Annual Research Conclave 2026',
+  eventName = 'MRF Research Retreat',
 }: AdminTopBarProps) {
   const [isOnline, setIsOnline] = useState<boolean>(true);
   const [pendingCount, setPendingCount] = useState<number>(0);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  const [activeEventName, setActiveEventName] = useState<string>(eventName);
+
+  useEffect(() => {
+    fetch('/api/event')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.event?.name) {
+          setActiveEventName(data.event.name);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     // Check initial online status
@@ -64,7 +76,7 @@ export function AdminTopBar({
         <div className="flex items-center gap-2">
           <span className="text-xs font-medium text-[#667085]">Active Event:</span>
           <span className="text-xs font-semibold text-[#142D4E] bg-[#EAF2FC] px-2.5 py-1 rounded border border-[#2864B4]/20">
-            {eventName}
+            {activeEventName}
           </span>
         </div>
       </div>

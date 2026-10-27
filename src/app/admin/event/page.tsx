@@ -25,7 +25,7 @@ export default function EventSettingsPage() {
 
   // Form fields
   const [eventId, setEventId] = useState('');
-  const [eventName, setEventName] = useState('MRF Annual Research Conclave 2026');
+  const [eventName, setEventName] = useState('MRF Research Retreat');
   const [eventDate, setEventDate] = useState('2026-10-24');
   const [timezone, setTimezone] = useState('Asia/Kolkata');
   const [kioskEnabled, setKioskEnabled] = useState(true);
@@ -33,7 +33,7 @@ export default function EventSettingsPage() {
   const [photoRetentionDays, setPhotoRetentionDays] = useState(365);
 
   const [sessionId, setSessionId] = useState('');
-  const [sessionName, setSessionName] = useState('General Conclave Check-in Session');
+  const [sessionName, setSessionName] = useState('General Retreat Check-in Session');
   const [sessionStatus, setSessionStatus] = useState<'open' | 'closed'>('open');
 
   const loadSettings = async () => {
