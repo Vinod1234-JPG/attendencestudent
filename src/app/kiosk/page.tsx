@@ -24,7 +24,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { CameraView } from '@/components/kiosk/CameraView';
 import { getOfflineDb, OfflineAttendanceRecord } from '@/lib/db/dexie';
-import { normalizeEmail, normalizePhdId, maskIdentifier } from '@/lib/utils/normalization';
+import { normalizeEmail, normalizePhdId, maskIdentifier, isNameMatching } from '@/lib/utils/normalization';
 import { syncEngine } from '@/lib/sync/syncEngine';
 
 type KioskStep =
@@ -119,7 +119,18 @@ export default function KioskPage() {
   // STEP 2: Submit Details while photo is clearly visible
   const handleDetailsSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!identifierInput.trim()) return;
+    if (!nameInput.trim()) {
+      setErrorMessage('Please enter your full name.');
+      return;
+    }
+    if (!identifierInput.trim()) {
+      setErrorMessage(
+        category === 'guide'
+          ? 'Please enter your registered email address.'
+          : 'Please enter your official PhD ID.'
+      );
+      return;
+    }
 
     setIsLoading(true);
     setErrorMessage(null);
@@ -133,7 +144,7 @@ export default function KioskPage() {
         const res = await fetch('/api/kiosk/lookup', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ category, identifier: normalized }),
+          body: JSON.stringify({ category, identifier: normalized, name: nameInput.trim() }),
         });
         const data = await res.json();
 
@@ -186,24 +197,23 @@ export default function KioskPage() {
       }
 
       if (!person) {
-        // Fallback for self-check-in if name is provided
-        if (nameInput.trim()) {
-          person = {
-            id: `offline-${Date.now()}`,
-            name: nameInput.trim(),
-            category,
-            normalized_email: category === 'guide' ? normalized : null,
-            phd_id: category === 'phd_scholar' ? normalized : null,
-          };
-        } else {
-          setErrorMessage(
-            category === 'guide'
-              ? 'Guide email not found. Please enter your name and registered email.'
-              : 'PhD ID not found. Please verify your official MRF PhD ID.'
-          );
-          setIsLoading(false);
-          return;
-        }
+        setErrorMessage(
+          category === 'guide'
+            ? 'Guide email not found. Please verify your registered email or contact the desk.'
+            : 'Official PhD ID not found. Please check your MRF PhD ID or contact the desk.'
+        );
+        setIsLoading(false);
+        return;
+      }
+
+      if (!isNameMatching(nameInput.trim(), person.name)) {
+        setErrorMessage(
+          category === 'guide'
+            ? `The entered name "${nameInput.trim()}" does not match the registered name for this email address.`
+            : `The entered name "${nameInput.trim()}" does not match the registered name for PhD ID ${normalized}.`
+        );
+        setIsLoading(false);
+        return;
       }
 
       const session = await db.cached_sessions.where('status').equals('open').first();

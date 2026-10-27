@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { recordAuditLog } from '@/lib/utils/audit';
 import { addDevAttendanceRecord, getDevStorage } from '@/lib/db/devStore';
+import { isNameMatching } from '@/lib/utils/normalization';
 
 export async function POST(request: Request) {
   try {
@@ -34,6 +35,13 @@ export async function POST(request: Request) {
     if (isPlaceholder) {
       const devStore = getDevStorage();
       const person = devStore.people.find((p) => p.id === personId);
+
+      if (person && attendeeName && !isNameMatching(attendeeName, person.name)) {
+        return NextResponse.json(
+          { error: `The name "${attendeeName}" does not match the registered record (${person.name}).` },
+          { status: 400 }
+        );
+      }
 
       const devRecord = {
         id: `dev-rec-${operationId.slice(0, 8)}`,
@@ -96,6 +104,14 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: 'Attendee record not found.' },
         { status: 404 }
+      );
+    }
+
+    // 2b. Strictly verify that attendee_name matches the person's registered name
+    if (attendeeName && !isNameMatching(attendeeName, person.name)) {
+      return NextResponse.json(
+        { error: `The name "${attendeeName}" does not match the registered record (${person.name}).` },
+        { status: 400 }
       );
     }
 

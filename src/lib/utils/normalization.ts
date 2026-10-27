@@ -72,3 +72,44 @@ export function maskIdentifier(identifier: string, category: 'guide' | 'phd_scho
     return `${prefix}***${suffix}`;
   }
 }
+
+/**
+ * Verifies if an entered attendee name matches the registered attendee name.
+ * Handles case-insensitivity, academic titles (Dr., Prof., Mr., Ms., Mrs.),
+ * extraneous spacing, punctuation, and multi-word ordering/subsets.
+ */
+export function isNameMatching(
+  inputName: string | null | undefined,
+  registeredName: string | null | undefined
+): boolean {
+  if (!inputName || !registeredName) return false;
+
+  const clean = (str: string) =>
+    str
+      .toLowerCase()
+      .replace(/\b(dr|prof|mr|ms|mrs)\b\.?/gi, '')
+      .replace(/[^\w\s]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+  const cleanInput = clean(inputName);
+  const cleanReg = clean(registeredName);
+
+  if (!cleanInput || !cleanReg) return false;
+  if (cleanInput === cleanReg) return true;
+
+  // Substring check (e.g. "Deepika" matches "Deepika Sharma" or vice versa)
+  if (cleanReg.includes(cleanInput) || cleanInput.includes(cleanReg)) {
+    return true;
+  }
+
+  // Word token overlap check
+  const inputWords = cleanInput.split(' ').filter((w) => w.length >= 2);
+  const regWords = cleanReg.split(' ').filter((w) => w.length >= 2);
+
+  if (inputWords.length === 0 || regWords.length === 0) return false;
+
+  // At least one significant name token (first or last name) must match
+  const hasCommonWord = inputWords.some((w) => regWords.includes(w));
+  return hasCommonWord;
+}

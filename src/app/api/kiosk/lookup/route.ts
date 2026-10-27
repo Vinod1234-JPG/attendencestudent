@@ -1,15 +1,22 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { normalizeEmail, normalizePhdId, maskIdentifier } from '@/lib/utils/normalization';
+import { normalizeEmail, normalizePhdId, maskIdentifier, isNameMatching } from '@/lib/utils/normalization';
 import { getDevStorage } from '@/lib/db/devStore';
 
 export async function POST(request: Request) {
   try {
-    const { category, identifier } = await request.json();
+    const { category, identifier, name } = await request.json();
 
     if (!category || !identifier) {
       return NextResponse.json(
         { error: 'Category and identifier are required.' },
+        { status: 400 }
+      );
+    }
+
+    if (!name || !String(name).trim()) {
+      return NextResponse.json(
+        { error: 'Full Name is required.' },
         { status: 400 }
       );
     }
@@ -21,6 +28,7 @@ export async function POST(request: Request) {
       );
     }
 
+    const trimmedName = String(name).trim();
     const isPlaceholder =
       !process.env.NEXT_PUBLIC_SUPABASE_URL ||
       process.env.NEXT_PUBLIC_SUPABASE_URL.includes('placeholder');
@@ -38,11 +46,24 @@ export async function POST(request: Request) {
         }
       });
 
+      // If matched, verify both name and identifier
+      if (matchedPerson && !isNameMatching(trimmedName, matchedPerson.name)) {
+        return NextResponse.json(
+          {
+            error:
+              category === 'guide'
+                ? `The entered name "${trimmedName}" does not match the registered name for this email address.`
+                : `The entered name "${trimmedName}" does not match the registered name for PhD ID ${identifier}.`,
+          },
+          { status: 400 }
+        );
+      }
+
       // If not in dev database, create on the fly so attendee can proceed in test mode
       if (!matchedPerson) {
         matchedPerson = {
           id: crypto.randomUUID(),
-          name: category === 'guide' ? `Guide (${normalized.split('@')[0]})` : `PhD Scholar (${normalized})`,
+          name: trimmedName,
           category,
           normalized_email: category === 'guide' ? normalized : null,
           phd_id: category === 'phd_scholar' ? normalized : null,
@@ -120,7 +141,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // 2. Lookup attendee in `people`
+    // 2. Lookup attendee in `people` by identifier
     let person = null;
 
     if (category === 'guide') {
@@ -142,7 +163,7 @@ export async function POST(request: Request) {
       }
       person = data;
     } else {
-      // PhD Scholar: allow lookup by PhD ID (case-insensitive) or email
+      // PhD Scholar: lookup by PhD ID (case-insensitive) or email
       let scholarQuery = admin
         .from('people')
         .select('id, name, category, phd_id, normalized_email, metadata')
@@ -181,7 +202,20 @@ export async function POST(request: Request) {
       }
     }
 
-    // 3. Check for existing attendance in this session (duplicate prevention)
+    // 3. Strict Check: Verify that the entered name matches the registered person's name
+    if (!isNameMatching(trimmedName, person.name)) {
+      return NextResponse.json(
+        {
+          error:
+            category === 'guide'
+              ? `The entered name "${trimmedName}" does not match the registered name for this email address.`
+              : `The entered name "${trimmedName}" does not match the registered name for PhD ID ${identifier}.`,
+        },
+        { status: 400 }
+      );
+    }
+
+    // 4. Check for existing attendance in this session (duplicate prevention)
     const { data: existingRecord } = await admin
       .from('attendance_records')
       .select('id, captured_at_device')
