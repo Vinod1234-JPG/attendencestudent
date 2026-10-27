@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
 import {
   Upload,
@@ -13,7 +13,8 @@ import {
   Trash2,
   FileText,
   RefreshCw,
-  HelpCircle
+  HelpCircle,
+  Search,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { Button } from '@/components/ui/button';
@@ -34,6 +35,10 @@ export default function ImportPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [importResult, setImportResult] = useState<any | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Preview filtering and viewing limit states
+  const [previewLimit, setPreviewLimit] = useState<number | 'all'>('all');
+  const [previewSearch, setPreviewSearch] = useState('');
 
   // Template generators
   const downloadTemplate = (cat: 'guide' | 'phd_scholar', format: 'csv' | 'xlsx') => {
@@ -74,6 +79,8 @@ export default function ImportPage() {
     setFile(uploadedFile);
     setErrorMessage(null);
     setIsProcessing(true);
+    setPreviewSearch('');
+    setPreviewLimit('all');
 
     try {
       const buffer = await uploadedFile.arrayBuffer();
@@ -143,7 +150,6 @@ export default function ImportPage() {
     }
   };
 
-  // Commit Import to Server
   const handleCommitImport = async () => {
     setIsProcessing(true);
     setErrorMessage(null);
@@ -182,7 +188,24 @@ export default function ImportPage() {
     setInvalidRows([]);
     setImportResult(null);
     setErrorMessage(null);
+    setPreviewSearch('');
+    setPreviewLimit('all');
   };
+
+  // Filtered rows based on preview search query
+  const filteredRows = useMemo(() => {
+    if (!previewSearch.trim()) return parsedRows;
+    const q = previewSearch.toLowerCase();
+    return parsedRows.filter((r) =>
+      Object.values(r).some((val) => String(val ?? '').toLowerCase().includes(q))
+    );
+  }, [parsedRows, previewSearch]);
+
+  // Rows currently displayed based on limit selection
+  const displayedRows = useMemo(() => {
+    if (previewLimit === 'all') return filteredRows;
+    return filteredRows.slice(0, previewLimit);
+  }, [filteredRows, previewLimit]);
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -371,13 +394,58 @@ export default function ImportPage() {
               </p>
             </div>
 
-            {/* Preview Sample Table with ALL columns */}
-            <h3 className="text-xs font-bold text-[#182230] uppercase mb-2">
-              Preview Data ({Math.min(10, parsedRows.length)} of {parsedRows.length} Rows)
-            </h3>
-            <div className="overflow-x-auto border border-[#E4E9F0] rounded-lg mb-6 max-h-96">
+            {/* Preview Controls Bar */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+              <div>
+                <h3 className="text-xs font-bold text-[#182230] uppercase">
+                  Preview Data (Showing {displayedRows.length} of {parsedRows.length} Rows)
+                </h3>
+                <p className="text-[11px] text-[#667085]">
+                  Scroll through all detected attendees or filter by typing below.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Search within preview */}
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-[#667085]" />
+                  <input
+                    type="text"
+                    placeholder="Filter preview..."
+                    value={previewSearch}
+                    onChange={(e) => setPreviewSearch(e.target.value)}
+                    className="pl-8 pr-3 py-1.5 text-xs border border-[#CBD5E1] rounded-md focus:outline-none focus:ring-1 focus:ring-[#2864B4] bg-white w-40 sm:w-48 text-[#182230]"
+                  />
+                </div>
+
+                {/* Row View Limit Selector */}
+                <div className="inline-flex rounded-md shadow-sm border border-[#CBD5E1] overflow-hidden text-xs bg-white">
+                  {[10, 50, 100, 'all'].map((val) => {
+                    const label = val === 'all' ? `All (${parsedRows.length})` : String(val);
+                    const active = previewLimit === val;
+                    return (
+                      <button
+                        key={String(val)}
+                        type="button"
+                        onClick={() => setPreviewLimit(val as any)}
+                        className={`px-2.5 py-1.5 font-medium transition-colors ${
+                          active
+                            ? 'bg-[#142D4E] text-white font-semibold'
+                            : 'text-[#667085] hover:bg-[#F7F9FC] hover:text-[#182230]'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Preview Table */}
+            <div className="overflow-x-auto border border-[#E4E9F0] rounded-lg mb-6 max-h-[520px]">
               <table className="w-full text-left text-xs whitespace-nowrap">
-                <thead className="bg-[#F7F9FC] text-[#667085] border-b border-[#E4E9F0] sticky top-0">
+                <thead className="bg-[#F7F9FC] text-[#667085] border-b border-[#E4E9F0] sticky top-0 z-10 shadow-sm">
                   <tr>
                     <th className="px-4 py-2.5 font-semibold bg-[#F7F9FC]">Row #</th>
                     {detectedColumns.map((col) => (
@@ -389,19 +457,32 @@ export default function ImportPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#E4E9F0]">
-                  {parsedRows.slice(0, 10).map((row, idx) => (
-                    <tr key={idx} className="hover:bg-[#F7F9FC]/70">
-                      <td className="px-4 py-2 text-[#667085] font-mono">{idx + 1}</td>
-                      {detectedColumns.map((col) => (
-                        <td key={col} className="px-4 py-2 text-[#182230]">
-                          {String(row[col] ?? '') || '—'}
-                        </td>
-                      ))}
-                      <td className="px-4 py-2">
-                        <Badge variant="success">Ready</Badge>
+                  {displayedRows.length === 0 ? (
+                    <tr>
+                      <td colSpan={detectedColumns.length + 2} className="px-4 py-8 text-center text-[#667085]">
+                        No rows matching "{previewSearch}".
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    displayedRows.map((row, idx) => {
+                      const originalIdx = parsedRows.indexOf(row);
+                      return (
+                        <tr key={idx} className="hover:bg-[#F7F9FC]/70 transition-colors">
+                          <td className="px-4 py-2 text-[#667085] font-mono">
+                            {originalIdx !== -1 ? originalIdx + 1 : idx + 1}
+                          </td>
+                          {detectedColumns.map((col) => (
+                            <td key={col} className="px-4 py-2 text-[#182230]">
+                              {String(row[col] ?? '') || '—'}
+                            </td>
+                          ))}
+                          <td className="px-4 py-2">
+                            <Badge variant="success">Ready</Badge>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
                 </tbody>
               </table>
             </div>
@@ -460,6 +541,11 @@ export default function ImportPage() {
             <Button variant="outline" size="md" onClick={handleResetImport}>
               Upload Another File
             </Button>
+            <Link href="/admin/attendees">
+              <Button variant="secondary" size="md">
+                View Registered Attendees
+              </Button>
+            </Link>
             <Link href="/kiosk/ready">
               <Button variant="primary" size="md">
                 <RefreshCw className="w-4 h-4 mr-2" /> Sync to Kiosk Offline Cache
@@ -471,3 +557,4 @@ export default function ImportPage() {
     </div>
   );
 }
+

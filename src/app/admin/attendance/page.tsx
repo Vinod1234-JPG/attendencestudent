@@ -149,6 +149,8 @@ export default function AttendanceRecordsPage() {
               <option value="25">25 per page</option>
               <option value="50">50 per page</option>
               <option value="100">100 per page</option>
+              <option value="500">500 per page</option>
+              <option value="1000">All (up to 1,000)</option>
             </select>
 
             <Button type="submit" variant="primary" size="sm">
@@ -421,3 +423,4 @@ export default function AttendanceRecordsPage() {
     </div>
   );
 }
+
