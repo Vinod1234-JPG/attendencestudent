@@ -79,12 +79,29 @@ export async function POST(request: Request) {
 
     const admin = createAdminClient();
 
-    // 1. Verify session is still open
-    const { data: session, error: sessErr } = await admin
-      .from('event_sessions')
-      .select('id, name, status, event_id')
-      .eq('id', sessionId)
-      .single();
+    // 1-3. High concurrency optimization: Execute session check, person lookup, and duplicate check concurrently
+    const [
+      { data: session, error: sessErr },
+      { data: person, error: personErr },
+      { data: existingRecord },
+    ] = await Promise.all([
+      admin
+        .from('event_sessions')
+        .select('id, name, status, event_id')
+        .eq('id', sessionId)
+        .single(),
+      admin
+        .from('people')
+        .select('id, name, category, normalized_email, phd_id')
+        .eq('id', personId)
+        .single(),
+      admin
+        .from('attendance_records')
+        .select('id, operation_id, captured_at_device')
+        .eq('session_id', sessionId)
+        .eq('person_id', personId)
+        .maybeSingle(),
+    ]);
 
     if (sessErr || !session || session.status !== 'open') {
       return NextResponse.json(
@@ -92,13 +109,6 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
-
-    // 2. Verify person exists
-    const { data: person, error: personErr } = await admin
-      .from('people')
-      .select('id, name, category, normalized_email, phd_id')
-      .eq('id', personId)
-      .single();
 
     if (personErr || !person) {
       return NextResponse.json(
@@ -114,14 +124,6 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
-
-    // 3. Check for existing attendance record (Idempotent check and duplicate prevention)
-    const { data: existingRecord } = await admin
-      .from('attendance_records')
-      .select('id, operation_id, captured_at_device')
-      .eq('session_id', sessionId)
-      .eq('person_id', personId)
-      .maybeSingle();
 
     if (existingRecord) {
       // If the same operation_id is sent again, return success idempotently
@@ -194,33 +196,29 @@ export async function POST(request: Request) {
       );
     }
 
-    // 6. Insert Attendance Photo Metadata
-    const { error: photoMetaErr } = await admin.from('attendance_photos').insert({
-      attendance_record_id: newRecord.id,
-      storage_object_key: storageKey,
-      content_type: photoFile.type || 'image/jpeg',
-      file_size: photoFile.size,
-      status: 'active',
-    });
-
-    if (photoMetaErr) {
-      console.warn('Photo metadata insert error:', photoMetaErr.message);
-    }
-
-    // 7. Audit log entry
-    await recordAuditLog({
-      action: 'ATTENDANCE_RECORDED',
-      entityType: 'ATTENDANCE',
-      entityId: newRecord.id,
-      outcome: 'success',
-      metadata: {
-        sessionId,
-        personId,
-        personName: person.name,
-        category: person.category,
-        operationId,
-      },
-    });
+    // 6 & 7. Concurrency optimization: persist photo metadata and audit log in parallel
+    await Promise.allSettled([
+      admin.from('attendance_photos').insert({
+        attendance_record_id: newRecord.id,
+        storage_object_key: storageKey,
+        content_type: photoFile.type || 'image/jpeg',
+        file_size: photoFile.size,
+        status: 'active',
+      }),
+      recordAuditLog({
+        action: 'ATTENDANCE_RECORDED',
+        entityType: 'ATTENDANCE',
+        entityId: newRecord.id,
+        outcome: 'success',
+        metadata: {
+          sessionId,
+          personId,
+          personName: person.name,
+          category: person.category,
+          operationId,
+        },
+      }),
+    ]);
 
     return NextResponse.json({
       success: true,

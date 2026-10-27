@@ -75,9 +75,17 @@ export function CameraView({ onCapture, onCancel }: CameraViewProps) {
 
     try {
       const video = videoRef.current;
+      const originalWidth = video.videoWidth || 640;
+      const originalHeight = video.videoHeight || 480;
+
+      // Optimize for high concurrency & free-tier storage:
+      // Scale to max width 640px (crisp portrait headshot, ~35KB vs ~300KB)
+      const targetWidth = Math.min(640, originalWidth);
+      const targetHeight = Math.round((originalHeight / originalWidth) * targetWidth);
+
       const canvas = document.createElement('canvas');
-      canvas.width = video.videoWidth || 640;
-      canvas.height = video.videoHeight || 480;
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
 
       const ctx = canvas.getContext('2d');
       if (!ctx) throw new Error('Canvas context unavailable');
@@ -87,7 +95,7 @@ export function CameraView({ onCapture, onCancel }: CameraViewProps) {
       ctx.scale(-1, 1);
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
 
       canvas.toBlob(
         (blob) => {
@@ -102,7 +110,7 @@ export function CameraView({ onCapture, onCancel }: CameraViewProps) {
           }
         },
         'image/jpeg',
-        0.85
+        0.8
       );
     } catch (err: any) {
       setErrorMessage(err.message || 'Capture failed.');
