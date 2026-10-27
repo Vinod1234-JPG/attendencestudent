@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { GraduationCap, Eye, EyeOff, Lock, Mail, Shield, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { AppFooter } from '@/components/common/AppFooter';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -42,12 +43,14 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F7F9FC] flex flex-col justify-center items-center p-6">
-      <div className="w-full max-w-md bg-white border border-[#E4E9F0] rounded-2xl shadow-sm p-8 md:p-10">
+    <div className="min-h-screen bg-[#F7F9FC] flex flex-col justify-between select-none">
+      <div className="flex-1 flex items-center justify-center p-6">
+        <div className="w-full max-w-md bg-white border border-[#E4E9F0] rounded-2xl shadow-sm p-8 md:p-10">
         {/* Brand Header */}
         <div className="text-center mb-8">
-          <div className="w-12 h-12 rounded-xl bg-[#142D4E] flex items-center justify-center text-white mx-auto mb-3 shadow-sm">
-            <GraduationCap className="w-7 h-7 text-[#EAF2FC]" />
+          <div className="w-16 h-16 rounded-full overflow-hidden bg-white shadow-sm shrink-0 border border-[#E4E9F0] flex items-center justify-center p-1 mx-auto mb-3">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo.jpg" alt="MRF Logo" className="w-full h-full object-contain rounded-full" />
           </div>
           <h1 className="text-sm font-bold tracking-widest text-[#2864B4] uppercase">
             Maharaja Research Foundation
@@ -116,6 +119,8 @@ export default function LoginPage() {
           </div>
         </div>
       </div>
+      </div>
+      <AppFooter />
     </div>
   );
 }

@@ -56,8 +56,9 @@ export function AdminSidebar({
     <aside className="w-64 bg-[#142D4E] text-white flex flex-col shrink-0 min-h-screen border-r border-[#0B1B30] select-none">
       {/* Brand Header */}
       <div className="p-6 border-b border-[#0B1B30] flex items-center gap-3">
-        <div className="w-10 h-10 rounded-lg bg-[#2864B4] flex items-center justify-center font-bold text-white shadow-sm shrink-0">
-          <GraduationCap className="w-6 h-6" />
+        <div className="w-10 h-10 rounded-full overflow-hidden bg-white shadow-sm shrink-0 flex items-center justify-center p-0.5 border border-white/20">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.jpg" alt="MRF Logo" className="w-full h-full object-contain rounded-full" />
         </div>
         <div className="overflow-hidden">
           <h1 className="font-bold text-sm tracking-wide text-white leading-tight">MRF EVENT ATTENDANCE</h1>

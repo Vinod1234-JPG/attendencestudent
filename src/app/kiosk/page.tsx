@@ -27,6 +27,7 @@ import { CameraView } from '@/components/kiosk/CameraView';
 import { getOfflineDb, OfflineAttendanceRecord } from '@/lib/db/dexie';
 import { normalizeEmail, normalizePhdId, maskIdentifier, isNameMatching } from '@/lib/utils/normalization';
 import { syncEngine } from '@/lib/sync/syncEngine';
+import { AppFooter } from '@/components/common/AppFooter';
 
 type KioskStep =
   | 'CAMERA_FIRST'
@@ -345,8 +346,9 @@ export default function KioskPage() {
       {/* Top Kiosk Header */}
       <header className="bg-white border-b border-[#E4E9F0] px-8 py-4 shadow-sm flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-[#142D4E] flex items-center justify-center text-white font-bold">
-            <GraduationCap className="w-6 h-6 text-[#EAF2FC]" />
+          <div className="w-11 h-11 rounded-full overflow-hidden bg-white shadow-xs shrink-0 border border-[#E4E9F0] flex items-center justify-center p-0.5">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo.jpg" alt="MRF Logo" className="w-full h-full object-contain rounded-full" />
           </div>
           <div>
             <h1 className="text-base font-bold text-[#142D4E] tracking-tight">
@@ -737,13 +739,8 @@ export default function KioskPage() {
         </div>
       </main>
 
-      {/* Kiosk Footer with Privacy Notice */}
-      <footer className="bg-white border-t border-[#E4E9F0] px-8 py-3 text-center text-xs text-[#667085]">
-        <p>
-          Photographs captured are strictly used for Maharaja Research Foundation event attendance
-          verification. All data is private and securely encrypted.
-        </p>
-      </footer>
+      {/* Constant Universal Footer */}
+      <AppFooter />
     </div>
   );
 }

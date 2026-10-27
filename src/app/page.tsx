@@ -11,6 +11,7 @@ import {
   Lock
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { AppFooter } from '@/components/common/AppFooter';
 
 export default function HomePage() {
   return (
@@ -18,8 +19,9 @@ export default function HomePage() {
       {/* Top Bar */}
       <header className="bg-white border-b border-[#E4E9F0] px-8 py-4 shadow-sm flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-[#142D4E] flex items-center justify-center text-white font-bold">
-            <GraduationCap className="w-6 h-6 text-[#EAF2FC]" />
+          <div className="w-11 h-11 rounded-full overflow-hidden bg-white shadow-xs shrink-0 border border-[#E4E9F0] flex items-center justify-center p-0.5">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo.jpg" alt="MRF Logo" className="w-full h-full object-contain rounded-full" />
           </div>
           <div>
             <h1 className="text-sm font-bold text-[#142D4E] tracking-tight">
@@ -120,10 +122,8 @@ export default function HomePage() {
         </div>
       </main>
 
-      {/* Footer */}
-      <footer className="bg-white border-t border-[#E4E9F0] px-8 py-4 text-center text-xs text-[#667085]">
-        <p>© 2026 Maharaja Research Foundation (MRF). All rights reserved.</p>
-      </footer>
+      {/* Constant Universal Footer */}
+      <AppFooter />
     </div>
   );
 }
