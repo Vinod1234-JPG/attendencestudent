@@ -192,23 +192,29 @@ Do not distribute or share these images outside authorized institutional workflo
 `;
       zip.file('README.txt', readmeContent);
 
-      // 3. Download and package photos from Supabase Storage
-      for (const r of items) {
-        const photo = Array.isArray(r.attendance_photos) ? r.attendance_photos[0] : r.attendance_photos;
-        if (photo && photo.storage_object_key) {
-          try {
-            const { data: fileBlob, error: downloadErr } = await admin.storage
-              .from('mrf-attendance-photos')
-              .download(photo.storage_object_key);
+      // 3. Download and package photos from Supabase Storage in parallel chunks
+      const PHOTO_CHUNK_SIZE = 12;
+      for (let i = 0; i < items.length; i += PHOTO_CHUNK_SIZE) {
+        const chunk = items.slice(i, i + PHOTO_CHUNK_SIZE);
+        await Promise.all(
+          chunk.map(async (r) => {
+            const photo = Array.isArray(r.attendance_photos) ? r.attendance_photos[0] : r.attendance_photos;
+            if (photo && photo.storage_object_key) {
+              try {
+                const { data: fileBlob, error: downloadErr } = await admin.storage
+                  .from('mrf-attendance-photos')
+                  .download(photo.storage_object_key);
 
-            if (fileBlob && !downloadErr) {
-              const arrayBuf = await fileBlob.arrayBuffer();
-              photosFolder?.file(`${r.id}.jpg`, arrayBuf);
+                if (fileBlob && !downloadErr) {
+                  const arrayBuf = await fileBlob.arrayBuffer();
+                  photosFolder?.file(`${r.id}.jpg`, arrayBuf);
+                }
+              } catch (e) {
+                console.warn(`Could not include photo for record ${r.id}:`, e);
+              }
             }
-          } catch (e) {
-            console.warn(`Could not include photo for record ${r.id}:`, e);
-          }
-        }
+          })
+        );
       }
 
       const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' });

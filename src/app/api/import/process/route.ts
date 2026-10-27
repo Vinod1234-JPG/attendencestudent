@@ -221,20 +221,26 @@ export async function POST(request: Request) {
       }
     }
 
-    // 3. Update existing records with new metadata/name
-    for (const p of existingPeopleToUpdate) {
-      const matchCol = category === 'guide' ? 'normalized_email' : 'phd_id';
-      const matchVal = category === 'guide' ? p.normalized_email : p.phd_id;
-      await admin!
-        .from('people')
-        .update({
-          name: p.name,
-          metadata: p.metadata,
-          import_batch_id: batchId,
-          updated_at: new Date().toISOString(),
+    // 3. Update existing records with new metadata/name in concurrent batches
+    const CHUNK_SIZE = 15;
+    for (let i = 0; i < existingPeopleToUpdate.length; i += CHUNK_SIZE) {
+      const chunk = existingPeopleToUpdate.slice(i, i + CHUNK_SIZE);
+      await Promise.all(
+        chunk.map((p) => {
+          const matchCol = category === 'guide' ? 'normalized_email' : 'phd_id';
+          const matchVal = category === 'guide' ? p.normalized_email : p.phd_id;
+          return admin!
+            .from('people')
+            .update({
+              name: p.name,
+              metadata: p.metadata,
+              import_batch_id: batchId,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('category', category)
+            .eq(matchCol, matchVal);
         })
-        .eq('category', category)
-        .eq(matchCol, matchVal);
+      );
     }
 
     // 4. Update import batch summary
