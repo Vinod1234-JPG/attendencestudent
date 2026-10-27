@@ -73,59 +73,74 @@ export function CameraView({ onCapture, onCancel }: CameraViewProps) {
   const handleCapture = () => {
     if (!videoRef.current) return;
 
-    const video = videoRef.current;
-    const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth || 640;
-    canvas.height = video.videoHeight || 480;
+    try {
+      const video = videoRef.current;
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 480;
 
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('Canvas context unavailable');
 
-    // Draw frame onto canvas
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      // Flip horizontal to match mirrored webcam preview
+      ctx.translate(canvas.width, 0);
+      ctx.scale(-1, 1);
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
 
-    canvas.toBlob(
-      (blob) => {
-        if (blob) {
-          // Stop video tracks immediately upon capture
-          if (streamRef.current) {
-            streamRef.current.getTracks().forEach((t) => t.stop());
+      canvas.toBlob(
+        (blob) => {
+          if (blob) {
+            // Stop camera tracks after successful capture
+            if (streamRef.current) {
+              streamRef.current.getTracks().forEach((t) => t.stop());
+            }
+            onCapture(blob, dataUrl);
+          } else {
+            setErrorMessage('Failed to capture frame. Please try again.');
           }
-          onCapture(blob, dataUrl);
-        }
-      },
-      'image/jpeg',
-      0.85
-    );
+        },
+        'image/jpeg',
+        0.85
+      );
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Capture failed.');
+    }
+  };
+
+  const handleCancelClick = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+    }
+    onCancel();
   };
 
   return (
     <div className="flex flex-col items-center max-w-xl mx-auto w-full">
       <div className="text-center mb-4">
-        <h2 className="text-2xl font-bold text-[#142D4E]">Capture Attendance Photograph</h2>
-        <p className="text-sm text-[#667085] mt-1">
-          Position your face clearly within the frame and click Capture Photo.
+        <h3 className="text-xl font-bold text-[#142D4E]">Capture Attendance Photograph</h3>
+        <p className="text-xs text-[#667085] mt-1">
+          Position your face clearly within the frame and click <strong>Capture Photo</strong>.
         </p>
       </div>
 
-      {/* Video Viewport / Error Fallback */}
-      <div className="relative w-full aspect-[4/3] bg-[#0B1B30] rounded-xl overflow-hidden shadow-md border-2 border-[#142D4E]/20 flex items-center justify-center">
+      {/* Video Container Frame */}
+      <div className="relative w-full aspect-video max-h-[380px] bg-black rounded-2xl overflow-hidden border-4 border-[#142D4E] shadow-lg flex items-center justify-center">
         {isInitializing && (
-          <div className="text-center text-white p-4">
-            <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-2 text-[#2864B4]" />
-            <p className="text-sm">Initializing camera preview...</p>
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0B1B30] text-white p-6 z-10">
+            <RefreshCw className="w-8 h-8 text-[#2864B4] animate-spin mb-3" />
+            <p className="text-xs text-[#EAF2FC]">Initializing camera sensor...</p>
           </div>
         )}
 
-        {!isInitializing && errorMessage && (
-          <div className="p-6 text-center text-white max-w-sm">
-            <AlertCircle className="w-10 h-10 text-[#C0393A] mx-auto mb-3" />
-            <p className="text-sm font-medium mb-4">{errorMessage}</p>
+        {errorMessage && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0B1B30] text-white p-6 text-center z-10">
+            <AlertCircle className="w-10 h-10 text-[#C0393A] mb-3" />
+            <p className="text-sm font-semibold text-white mb-2">Camera Unavailable</p>
+            <p className="text-xs text-[#CBD5E1] max-w-sm mb-4">{errorMessage}</p>
             <Button variant="secondary" size="sm" onClick={startCamera}>
-              <RefreshCw className="w-4 h-4 mr-2" />
-              Retry Camera
+              <RefreshCw className="w-3.5 h-3.5 mr-1.5" /> Try Again
             </Button>
           </div>
         )}
@@ -135,13 +150,11 @@ export function CameraView({ onCapture, onCancel }: CameraViewProps) {
           autoPlay
           playsInline
           muted
-          className={`w-full h-full object-cover transform scale-x-[-1] ${
-            isInitializing || errorMessage ? 'hidden' : 'block'
-          }`}
+          className="w-full h-full object-cover transform scale-x-[-1]"
         />
 
-        {/* Framing guide overlay */}
-        {!isInitializing && !errorMessage && (
+        {/* Guiding Oval Target */}
+        {hasPermission && !isInitializing && (
           <div className="absolute inset-0 pointer-events-none border-2 border-white/20 rounded-xl m-6 flex items-center justify-center">
             <div className="w-48 h-60 border-2 border-dashed border-white/50 rounded-full"></div>
           </div>
@@ -153,7 +166,7 @@ export function CameraView({ onCapture, onCancel }: CameraViewProps) {
         <Button
           variant="outline"
           size="lg"
-          onClick={onCancel}
+          onClick={handleCancelClick}
           disabled={isInitializing}
         >
           Cancel

@@ -1,4 +1,5 @@
 'use client';
+import { useRouter } from 'next/navigation';
 
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
@@ -47,6 +48,7 @@ interface AttendeeData {
 }
 
 export default function KioskPage() {
+  const router = useRouter();
   const [step, setStep] = useState<KioskStep>('CAMERA_FIRST');
   const [capturedBlob, setCapturedBlob] = useState<Blob | null>(null);
   const [capturedDataUrl, setCapturedDataUrl] = useState<string | null>(null);
@@ -93,6 +95,11 @@ export default function KioskPage() {
       };
     }
   }, []);
+
+  const handleCancelKiosk = () => {
+    handleReset();
+    router.push('/');
+  };
 
   const handleReset = () => {
     if (resetTimerRef.current) clearInterval(resetTimerRef.current);
@@ -401,7 +408,7 @@ export default function KioskPage() {
 
               <CameraView
                 onCapture={handlePhotoCaptured}
-                onCancel={handleReset}
+                onCancel={handleCancelKiosk}
               />
             </div>
           )}
@@ -418,13 +425,22 @@ export default function KioskPage() {
                     Step 2: Enter Your Details
                   </h2>
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setStep('CAMERA_FIRST')}
-                >
-                  <RotateCcw className="w-3.5 h-3.5 mr-1" /> Retake Photo
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCancelKiosk}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setStep('CAMERA_FIRST')}
+                  >
+                    <RotateCcw className="w-3.5 h-3.5 mr-1" /> Retake Photo
+                  </Button>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-start">
@@ -613,6 +629,13 @@ export default function KioskPage() {
               )}
 
               <div className="flex gap-4">
+                <Button
+                  variant="outline"
+                  size="lg"
+                  onClick={handleCancelKiosk}
+                >
+                  Cancel
+                </Button>
                 <Button
                   variant="outline"
                   size="lg"
