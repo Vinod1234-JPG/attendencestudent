@@ -467,8 +467,8 @@ export default function KioskPage() {
                 {/* Right Side: Category Selection & Inputs */}
                 <div className="md:col-span-7 space-y-5">
                   {/* Category Switcher */}
-                  <div>
-                    <label className="text-xs font-bold text-[#182230] block mb-2">
+                  <div className="space-y-2.5">
+                    <label className="text-xs font-bold text-[#182230] block">
                       Select Your Category:
                     </label>
                     <div className="grid grid-cols-2 gap-3">
@@ -478,14 +478,14 @@ export default function KioskPage() {
                           setCategory('guide');
                           setErrorMessage(null);
                         }}
-                        className={`p-3 rounded-lg border text-left flex items-center gap-2.5 transition-all ${
+                        className={`p-3.5 rounded-lg border text-left flex items-center gap-2.5 transition-all ${
                           category === 'guide'
-                            ? 'border-[#2864B4] bg-[#EAF2FC] text-[#142D4E] font-bold shadow-xs'
+                            ? 'border-[#2864B4] bg-[#EAF2FC] text-[#142D4E] font-bold shadow-xs ring-1 ring-[#2864B4]'
                             : 'border-[#E4E9F0] bg-white text-[#667085] hover:bg-[#F7F9FC]'
                         }`}
                       >
                         <BookOpen className="w-4 h-4 text-[#2864B4]" />
-                        <span className="text-xs">Guide</span>
+                        <span className="text-xs font-semibold">Guide</span>
                       </button>
 
                       <button
@@ -494,23 +494,39 @@ export default function KioskPage() {
                           setCategory('phd_scholar');
                           setErrorMessage(null);
                         }}
-                        className={`p-3 rounded-lg border text-left flex items-center gap-2.5 transition-all ${
+                        className={`p-3.5 rounded-lg border text-left flex items-center gap-2.5 transition-all ${
                           category === 'phd_scholar'
-                            ? 'border-[#2864B4] bg-[#EAF2FC] text-[#142D4E] font-bold shadow-xs'
+                            ? 'border-[#2864B4] bg-[#EAF2FC] text-[#142D4E] font-bold shadow-xs ring-1 ring-[#2864B4]'
                             : 'border-[#E4E9F0] bg-white text-[#667085] hover:bg-[#F7F9FC]'
                         }`}
                       >
                         <GraduationCap className="w-4 h-4 text-[#2864B4]" />
-                        <span className="text-xs">PhD Scholar</span>
+                        <span className="text-xs font-semibold">PhD Scholar</span>
                       </button>
+                    </div>
+
+                    {/* Active Category Indicator Banner */}
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#EAF2FC]/70 border border-[#2864B4]/20 text-[#142D4E] text-xs">
+                      {category === 'guide' ? (
+                        <>
+                          <BookOpen className="w-3.5 h-3.5 text-[#2864B4] shrink-0" />
+                          <span>Showing inputs for: <strong>Research Guide</strong></span>
+                        </>
+                      ) : (
+                        <>
+                          <GraduationCap className="w-3.5 h-3.5 text-[#2864B4] shrink-0" />
+                          <span>Showing inputs for: <strong>PhD Scholar</strong></span>
+                        </>
+                      )}
                     </div>
                   </div>
 
                   {/* Form Inputs */}
                   <form onSubmit={handleDetailsSubmit} className="space-y-4">
                     <Input
-                      label="Full Name"
-                      placeholder="e.g. Dr. Anand Sharma or Deepika Sharma"
+                      label="Full Name (as per MRF Website)"
+                      placeholder="Enter full name as registered on MRF website"
+                      helperText="Please enter your full name exactly as registered on the MRF website."
                       value={nameInput}
                       onChange={(e) => setNameInput(e.target.value)}
                       required
@@ -519,13 +535,18 @@ export default function KioskPage() {
                     <Input
                       label={
                         category === 'guide'
-                          ? 'Registered Email Address'
-                          : 'Official MRF PhD ID'
+                          ? 'Registered Email Address (MRF Email)'
+                          : 'Registered Email Address / PhD ID (as per MRF Website)'
                       }
                       placeholder={
                         category === 'guide'
-                          ? 'e.g. prof.name@university.edu'
-                          : 'e.g. MRF-PHD-2026-001'
+                          ? 'Enter registered MRF email address'
+                          : 'Enter registered MRF email address or PhD ID (e.g. 17)'
+                      }
+                      helperText={
+                        category === 'guide'
+                          ? 'Please enter your registered MRF email address.'
+                          : 'Please enter your registered MRF email address or official PhD ID.'
                       }
                       type={category === 'guide' ? 'email' : 'text'}
                       value={identifierInput}
@@ -601,9 +622,11 @@ export default function KioskPage() {
                     </span>
                   </div>
                   <div className="flex justify-between border-b border-[#E4E9F0] pb-2">
-                    <span className="text-[#667085] font-medium">Identifier:</span>
+                    <span className="text-[#667085] font-medium">
+                      {attendee.category === 'guide' ? 'Registered Email Address:' : 'PhD ID / Email Address:'}
+                    </span>
                     <span className="font-mono font-semibold text-[#182230]">
-                      {attendee.category === 'guide' ? attendee.identifier : `ID: ${attendee.identifier}`}
+                      {attendee.identifier}
                     </span>
                   </div>
 

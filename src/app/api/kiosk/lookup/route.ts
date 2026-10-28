@@ -152,16 +152,53 @@ export async function POST(request: Request) {
         .ilike('normalized_email', normalized)
         .maybeSingle();
 
-      if (error || !data) {
-        return NextResponse.json(
-          {
-            error:
-              'Guide email not found. Please verify your registered email address or contact the registration desk.',
-          },
-          { status: 404 }
-        );
+      if (data) {
+        person = data;
+      } else {
+        // Also check if Guide email was in metadata
+        const { data: allGuides } = await admin
+          .from('people')
+          .select('id, name, category, normalized_email, metadata')
+          .eq('category', 'guide');
+
+        const clean = identifier.trim().toLowerCase();
+        person = (allGuides || []).find((g) => {
+          if (g.normalized_email && g.normalized_email.toLowerCase() === clean) return true;
+          if (g.metadata) {
+            const mEmail = g.metadata.Email || g.metadata.email || g.metadata['Email ID'] || g.metadata['Email Address'];
+            if (mEmail && String(mEmail).trim().toLowerCase() === clean) return true;
+          }
+          return false;
+        });
+
+        if (!person) {
+          // Check if user is registered under PhD Scholar instead
+          const { data: altScholar } = await admin
+            .from('people')
+            .select('name')
+            .eq('category', 'phd_scholar')
+            .or(`phd_id.ilike.%${identifier.trim()}%,normalized_email.ilike.%${identifier.trim()}%`)
+            .limit(1)
+            .maybeSingle();
+
+          if (altScholar) {
+            return NextResponse.json(
+              {
+                error: `Found "${altScholar.name}" under PhD Scholar. Please select the "PhD Scholar" category button above.`,
+              },
+              { status: 400 }
+            );
+          }
+
+          return NextResponse.json(
+            {
+              error:
+                'Guide email not found on MRF website. Please verify your registered email address or contact the registration desk.',
+            },
+            { status: 404 }
+          );
+        }
       }
-      person = data;
     } else {
       // PhD Scholar: lookup by PhD ID (case-insensitive) or email
       let scholarQuery = admin
@@ -188,14 +225,48 @@ export async function POST(request: Request) {
 
         if (byAlt) {
           person = byAlt;
+        } else {
+          // Check metadata for email
+          const { data: allScholars } = await admin
+            .from('people')
+            .select('id, name, category, phd_id, normalized_email, metadata')
+            .eq('category', 'phd_scholar');
+
+          const clean = identifier.trim().toLowerCase();
+          person = (allScholars || []).find((s) => {
+            if (s.normalized_email && s.normalized_email.toLowerCase() === clean) return true;
+            if (s.phd_id && s.phd_id.toLowerCase() === clean) return true;
+            if (s.metadata) {
+              const mEmail = s.metadata.Email || s.metadata.email || s.metadata['Email ID'] || s.metadata['Email Address'];
+              if (mEmail && String(mEmail).trim().toLowerCase() === clean) return true;
+            }
+            return false;
+          });
         }
       }
 
       if (!person) {
+        // Check if user is registered under Guide instead
+        const { data: altGuide } = await admin
+          .from('people')
+          .select('name')
+          .eq('category', 'guide')
+          .ilike('normalized_email', identifier.trim().toLowerCase())
+          .maybeSingle();
+
+        if (altGuide) {
+          return NextResponse.json(
+            {
+              error: `Found "${altGuide.name}" under Research Guide. Please select the "Guide" category button above.`,
+            },
+            { status: 400 }
+          );
+        }
+
         return NextResponse.json(
           {
             error:
-              'Official PhD ID or email not found. Please check your MRF PhD ID or contact the registration desk.',
+              'Official PhD ID or email not found on MRF website. Please check your registered MRF details or contact the registration desk.',
           },
           { status: 404 }
         );
@@ -208,8 +279,8 @@ export async function POST(request: Request) {
         {
           error:
             category === 'guide'
-              ? `The entered name "${trimmedName}" does not match the registered name for this email address.`
-              : `The entered name "${trimmedName}" does not match the registered name for PhD ID ${identifier}.`,
+              ? `The entered name "${trimmedName}" does not match the registered name on the MRF website for this email address (${person.name}).`
+              : `The entered name "${trimmedName}" does not match the registered name on the MRF website for PhD ID ${identifier} (${person.name}).`,
         },
         { status: 400 }
       );
