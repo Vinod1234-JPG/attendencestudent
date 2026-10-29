@@ -1,9 +1,15 @@
 import { NextResponse } from 'next/server';
+import { unstable_noStore as noStore } from 'next/cache';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { recordAuditLog } from '@/lib/utils/audit';
 import { getDevStorage } from '@/lib/db/devStore';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+export const fetchCache = 'force-no-store';
+
 export async function GET() {
+  noStore();
   try {
     const isPlaceholder =
       !process.env.NEXT_PUBLIC_SUPABASE_URL ||
@@ -51,6 +57,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  noStore();
   try {
     const body = await request.json().catch(() => ({}));
     if (!body || (!body.confirm && body.confirm !== 'PURGE_ALL_DATA')) {
