@@ -6,7 +6,6 @@
 **Live Production URL:** [https://attendencetracker-ten.vercel.app](https://attendencetracker-ten.vercel.app)
 
 ---
-
 ## 1. Executive Summary & Objective
 
 The **MRF Research Retreat Attendance Tracker** is an enterprise-grade academic event management platform engineered for the Maharaja Research Foundation's **Research Retreat**. It provides automated, high-concurrency attendee verification, face photograph capture, and real-time attendance management across multiple kiosk terminals.
