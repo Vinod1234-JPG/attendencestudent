@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import {
   Users,
@@ -16,7 +16,8 @@ import {
   Camera,
   Eye,
   Shield,
-  Award
+  Award,
+  X
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -46,18 +47,30 @@ export default function RegisteredAttendeesPage() {
   });
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
 
+  const searchRef = useRef('');
+  searchRef.current = debouncedSearch;
+
   const [selectedAttendee, setSelectedAttendee] = useState<Attendee | null>(null);
 
-  const fetchAttendees = async () => {
+  // Auto-debounce search as user types after 250ms
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 250);
+    return () => clearTimeout(handler);
+  }, [search]);
+
+  const fetchAttendees = async (term = searchRef.current) => {
     setIsLoading(true);
     try {
       const params = new URLSearchParams({
         category: categoryFilter,
         status: statusFilter,
-        search: search.trim(),
+        search: (term ?? '').trim(),
         _t: Date.now().toString(),
       });
 
@@ -80,22 +93,29 @@ export default function RegisteredAttendeesPage() {
   };
 
   useEffect(() => {
-    fetchAttendees();
+    fetchAttendees(debouncedSearch);
 
     // Auto-refresh when tab gains focus or every 10 seconds for real-time live events
-    const onFocus = () => fetchAttendees();
+    const onFocus = () => fetchAttendees(searchRef.current);
     window.addEventListener('focus', onFocus);
-    const interval = setInterval(fetchAttendees, 10000);
+    const interval = setInterval(() => fetchAttendees(searchRef.current), 10000);
 
     return () => {
       window.removeEventListener('focus', onFocus);
       clearInterval(interval);
     };
-  }, [categoryFilter, statusFilter]);
+  }, [categoryFilter, statusFilter, debouncedSearch]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    fetchAttendees();
+    setDebouncedSearch(search);
+    fetchAttendees(search);
+  };
+
+  const handleClearSearch = () => {
+    setSearch('');
+    setDebouncedSearch('');
+    fetchAttendees('');
   };
 
   return (
@@ -114,59 +134,72 @@ export default function RegisteredAttendeesPage() {
               <Upload className="w-3.5 h-3.5 mr-1.5" /> Upload More Data
             </Button>
           </Link>
-          <Button variant="primary" size="sm" onClick={fetchAttendees} isLoading={isLoading}>
+          <Button variant="primary" size="sm" onClick={() => fetchAttendees(searchRef.current)} isLoading={isLoading}>
             <RefreshCw className="w-3.5 h-3.5 mr-1.5" /> Refresh Registry
           </Button>
         </div>
       </div>
 
-      {/* Summary KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      {/* Metric Cards Row */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         <Card className="p-4 bg-white border border-[#E4E9F0]">
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-[#667085] font-medium">Total Registered</span>
-            <Users className="w-4 h-4 text-[#2864B4]" />
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-[#EAF2FC] flex items-center justify-center text-[#2864B4]">
+              <Users className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-[11px] font-semibold text-[#667085] uppercase tracking-wider">Total Registered</p>
+              <p className="text-xl font-bold text-[#142D4E]">{counts.total}</p>
+            </div>
           </div>
-          <div className="text-2xl font-extrabold text-[#142D4E] mt-1">{counts.total}</div>
-          <span className="text-[11px] text-[#667085]">All Categories</span>
         </Card>
 
         <Card className="p-4 bg-white border border-[#E4E9F0]">
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-[#667085] font-medium">Research Guides</span>
-            <BookOpen className="w-4 h-4 text-[#2864B4]" />
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-[#EAF2FC] flex items-center justify-center text-[#2864B4]">
+              <BookOpen className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-[11px] font-semibold text-[#667085] uppercase tracking-wider">Guides</p>
+              <p className="text-xl font-bold text-[#142D4E]">{counts.guides}</p>
+            </div>
           </div>
-          <div className="text-2xl font-extrabold text-[#142D4E] mt-1">{counts.guides}</div>
-          <span className="text-[11px] text-[#667085]">Guides Registered</span>
         </Card>
 
         <Card className="p-4 bg-white border border-[#E4E9F0]">
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-[#667085] font-medium">PhD Scholars</span>
-            <GraduationCap className="w-4 h-4 text-[#2864B4]" />
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-[#FEF3F2] flex items-center justify-center text-[#B42318]">
+              <GraduationCap className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-[11px] font-semibold text-[#667085] uppercase tracking-wider">PhD Scholars</p>
+              <p className="text-xl font-bold text-[#142D4E]">{counts.scholars}</p>
+            </div>
           </div>
-          <div className="text-2xl font-extrabold text-[#142D4E] mt-1">{counts.scholars}</div>
-          <span className="text-[11px] text-[#667085]">Scholars Registered</span>
         </Card>
 
         <Card className="p-4 bg-white border border-[#E4E9F0]">
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-[#667085] font-medium">Attended at Kiosk</span>
-            <CheckCircle2 className="w-4 h-4 text-[#16835D]" />
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-[#ECFDF3] flex items-center justify-center text-[#027A48]">
+              <CheckCircle2 className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-[11px] font-semibold text-[#667085] uppercase tracking-wider">Attended</p>
+              <p className="text-xl font-bold text-[#027A48]">{counts.attended}</p>
+            </div>
           </div>
-          <div className="text-2xl font-extrabold text-[#16835D] mt-1">{counts.attended}</div>
-          <span className="text-[11px] text-[#16835D] font-medium">
-            {counts.total > 0 ? Math.round((counts.attended / counts.total) * 100) : 0}% Check-in Rate
-          </span>
         </Card>
 
         <Card className="p-4 bg-white border border-[#E4E9F0]">
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-[#667085] font-medium">Pending Arrival</span>
-            <Clock className="w-4 h-4 text-[#D97706]" />
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-[#FFFAEB] flex items-center justify-center text-[#B54708]">
+              <Clock className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-[11px] font-semibold text-[#667085] uppercase tracking-wider">Pending</p>
+              <p className="text-xl font-bold text-[#B54708]">{counts.pending}</p>
+            </div>
           </div>
-          <div className="text-2xl font-extrabold text-[#D97706] mt-1">{counts.pending}</div>
-          <span className="text-[11px] text-[#667085]">Awaiting Check-In</span>
         </Card>
       </div>
 
@@ -180,8 +213,18 @@ export default function RegisteredAttendeesPage() {
               placeholder="Search by attendee name, email address, or PhD ID..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 text-xs rounded-md border border-[#E4E9F0] focus:outline-none focus:ring-1 focus:ring-[#2864B4]"
+              className="w-full pl-9 pr-9 py-2 text-xs rounded-md border border-[#E4E9F0] focus:outline-none focus:ring-1 focus:ring-[#2864B4]"
             />
+            {search && (
+              <button
+                type="button"
+                onClick={handleClearSearch}
+                className="absolute right-3 top-2.5 text-[#98A2B3] hover:text-[#182230]"
+                title="Clear search"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
 
           <div className="flex items-center gap-2 w-full sm:w-auto">

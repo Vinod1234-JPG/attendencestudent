@@ -10,10 +10,13 @@ import {
   ShieldAlert,
   CheckCircle2,
   AlertTriangle,
-  RefreshCw
+  RefreshCw,
+  Camera,
+  Award
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { getOfflineDb } from '@/lib/db/dexie';
 import JSZip from 'jszip';
 
@@ -22,7 +25,7 @@ export default function ExportsPage() {
   const [recoveryStatus, setRecoveryStatus] = useState<string | null>(null);
 
   // Trigger server-generated downloads
-  const handleServerExport = async (format: 'csv' | 'xlsx' | 'zip', category: 'all' | 'guide' | 'phd_scholar') => {
+  const handleServerExport = async (format: 'csv' | 'xlsx' | 'zip' | 'pdf', category: 'all' | 'guide' | 'phd_scholar') => {
     const key = `${format}_${category}`;
     setIsExporting(key);
 
@@ -129,9 +132,91 @@ NOTE: These records represent attendance captured locally on this hardware devic
       <div>
         <h1 className="text-2xl font-extrabold text-[#142D4E]">Export Attendance Details</h1>
         <p className="text-xs text-[#667085] mt-1">
-          Download authenticated attendance reports, official spreadsheets, and archived photograph bundles.
+          Download authenticated attendance reports, printable PDF verification dossiers with photos, spreadsheets, and archived photograph bundles.
         </p>
       </div>
+
+      {/* PDF Dossier Section (Highlighted) */}
+      <Card className="border-2 border-[#142D4E]/20 bg-gradient-to-br from-white to-[#F7F9FC]">
+        <CardHeader>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <CardTitle className="text-base flex items-center gap-2 text-[#142D4E]">
+              <FileText className="w-5 h-5 text-[#2864B4]" /> Official PDF Attendance Reports (With Photos & Full Details)
+            </CardTitle>
+            <Badge variant="blue">Printable Dossier</Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-xs text-[#667085]">
+            Comprehensive landscape PDF documents containing attendee check-in photographs, full names, registered emails, PhD IDs, department affiliations, timestamps, and verification status. Suitable for institutional audits and archival records.
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="flex flex-col justify-between p-4 bg-white border border-[#E4E9F0] rounded-xl shadow-xs hover:border-[#2864B4] transition-all">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <Award className="w-4 h-4 text-[#2864B4]" />
+                  <p className="text-xs font-bold text-[#142D4E]">Guides Attendance (PDF)</p>
+                </div>
+                <p className="text-[11px] text-[#667085] mb-3">
+                  Photos, names, registered emails, departments, and verification timestamps.
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleServerExport('pdf', 'guide')}
+                isLoading={isExporting === 'pdf_guide'}
+                className="w-full"
+              >
+                <Download className="w-3.5 h-3.5 mr-1.5" /> Export Guides PDF
+              </Button>
+            </div>
+
+            <div className="flex flex-col justify-between p-4 bg-white border border-[#E4E9F0] rounded-xl shadow-xs hover:border-[#2864B4] transition-all">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <Camera className="w-4 h-4 text-[#E65100]" />
+                  <p className="text-xs font-bold text-[#142D4E]">PhD Scholars (PDF)</p>
+                </div>
+                <p className="text-[11px] text-[#667085] mb-3">
+                  Photos, names, PhD IDs, scholar emails, departments, and verification timestamps.
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleServerExport('pdf', 'phd_scholar')}
+                isLoading={isExporting === 'pdf_phd_scholar'}
+                className="w-full"
+              >
+                <Download className="w-3.5 h-3.5 mr-1.5" /> Export Scholars PDF
+              </Button>
+            </div>
+
+            <div className="flex flex-col justify-between p-4 bg-[#142D4E] text-white rounded-xl shadow-md">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <FileText className="w-4 h-4 text-[#84ADFF]" />
+                  <p className="text-xs font-bold text-white">Complete Event Docket (PDF)</p>
+                </div>
+                <p className="text-[11px] text-[#CBD5E1] mb-3">
+                  All verified attendees (both Guides and Scholars) with photos and all registry details.
+                </p>
+              </div>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => handleServerExport('pdf', 'all')}
+                isLoading={isExporting === 'pdf_all'}
+                className="w-full bg-[#2864B4] hover:bg-[#1E4D8C] text-white"
+              >
+                <Download className="w-3.5 h-3.5 mr-1.5" /> Export Complete PDF
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* CSV / Excel Formats Section */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

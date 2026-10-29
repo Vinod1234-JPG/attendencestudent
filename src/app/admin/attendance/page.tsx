@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Search,
   Filter,
@@ -25,23 +25,36 @@ export default function AttendanceRecordsPage() {
   const [records, setRecords] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [category, setCategory] = useState('');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(25);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
 
+  const searchRef = useRef('');
+  searchRef.current = debouncedSearch;
+
   // Selected record for details modal
   const [selectedRecord, setSelectedRecord] = useState<any | null>(null);
   const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
 
-  const fetchRecords = async () => {
+  // Real-time debounce: trigger as user types after 250ms
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1);
+    }, 250);
+    return () => clearTimeout(handler);
+  }, [search]);
+
+  const fetchRecords = async (term = searchRef.current) => {
     setIsLoading(true);
     try {
       const params = new URLSearchParams({
         page: page.toString(),
         limit: limit.toString(),
-        search: search.trim(),
+        search: (term ?? '').trim(),
         category,
         _t: Date.now().toString(),
       });
@@ -64,23 +77,31 @@ export default function AttendanceRecordsPage() {
   };
 
   useEffect(() => {
-    fetchRecords();
+    fetchRecords(debouncedSearch);
 
     // Auto-refresh when tab gains focus or every 10 seconds for real-time live events
-    const onFocus = () => fetchRecords();
+    const onFocus = () => fetchRecords(searchRef.current);
     window.addEventListener('focus', onFocus);
-    const interval = setInterval(fetchRecords, 10000);
+    const interval = setInterval(() => fetchRecords(searchRef.current), 10000);
 
     return () => {
       window.removeEventListener('focus', onFocus);
       clearInterval(interval);
     };
-  }, [page, category, limit]);
+  }, [page, category, limit, debouncedSearch]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setDebouncedSearch(search);
     setPage(1);
-    fetchRecords();
+    fetchRecords(search);
+  };
+
+  const handleClearSearch = () => {
+    setSearch('');
+    setDebouncedSearch('');
+    setPage(1);
+    fetchRecords('');
   };
 
   const forceCacheClear = () => {
@@ -89,7 +110,7 @@ export default function AttendanceRecordsPage() {
         names.forEach((name) => caches.delete(name));
       });
     }
-    fetchRecords();
+    fetchRecords(searchRef.current);
   };
 
   return (
@@ -119,8 +140,18 @@ export default function AttendanceRecordsPage() {
               placeholder="Search by attendee name, email, or PhD ID..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 text-xs rounded-md border border-[#E4E9F0] focus:outline-none focus:ring-1 focus:ring-[#2864B4]"
+              className="w-full pl-9 pr-9 py-2 text-xs rounded-md border border-[#E4E9F0] focus:outline-none focus:ring-1 focus:ring-[#2864B4]"
             />
+            {search && (
+              <button
+                type="button"
+                onClick={handleClearSearch}
+                className="absolute right-3 top-2.5 text-[#98A2B3] hover:text-[#182230]"
+                title="Clear search"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
 
           <div className="flex items-center gap-2 w-full sm:w-auto">
@@ -423,4 +454,3 @@ export default function AttendanceRecordsPage() {
     </div>
   );
 }
-
