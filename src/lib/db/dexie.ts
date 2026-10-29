@@ -27,6 +27,8 @@ export interface CachedPerson {
   name: string;
   normalized_email?: string | null;
   phd_id?: string | null;
+  metadata?: Record<string, any>;
+  extra_details?: Record<string, any>;
   updated_at?: string;
 }
 

@@ -39,6 +39,12 @@ describe('Normalization and Validation Utilities', () => {
     it('trims whitespace, capitalizes alphanumeric tokens, and preserves leading zeros', () => {
       expect(normalizePhdId('  mrf-phd-2026-0042  ')).toBe('MRF-PHD-2026-0042');
       expect(normalizePhdId('phd/0007')).toBe('PHD/0007');
+      expect(normalizePhdId('4mh24cs175')).toBe('4MH24CS175');
+    });
+
+    it('normalizes email addresses entered into PhD ID field as lowercase', () => {
+      expect(normalizePhdId('4MH24CS175@GMAIL.COM')).toBe('4mh24cs175@gmail.com');
+      expect(normalizePhdId('scholar.name@univ.edu')).toBe('scholar.name@univ.edu');
     });
 
     it('returns empty string for null or undefined', () => {
@@ -83,6 +89,8 @@ describe('Normalization and Validation Utilities', () => {
       expect(isNameMatching('bhavish', 'bhavish')).toBe(true);
       expect(isNameMatching('  Bhavish  ', 'bhavish')).toBe(true);
       expect(isNameMatching('BHAVISH', 'bhavish')).toBe(true);
+      expect(isNameMatching('yashavanth b n', 'YASHAVANTH B N')).toBe(true);
+      expect(isNameMatching('DR. YASHAVANTH B N', 'yashavanth b n')).toBe(true);
     });
 
     it('handles honorific titles like Dr. and Prof.', () => {

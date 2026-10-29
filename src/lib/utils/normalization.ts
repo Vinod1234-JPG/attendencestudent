@@ -30,9 +30,12 @@ export function isValidEmail(email: string | null | undefined): boolean {
  */
 export function normalizePhdId(id: string | null | undefined): string {
   if (!id) return '';
-  // Trim outer whitespace, replace multiple whitespace with single space, and capitalize standard alphanumeric codes
   const trimmed = String(id).trim();
-  // Standardize hyphens/slashes while preserving leading zeros
+  // If attendee entered an email in the PhD ID field, normalize as lowercase email
+  if (trimmed.includes('@')) {
+    return trimmed.toLowerCase();
+  }
+  // Standardize hyphens/slashes/alphanumeric codes to uppercase while preserving leading zeros
   return trimmed.replace(/\s+/g, ' ').toUpperCase();
 }
 
@@ -104,12 +107,15 @@ export function isNameMatching(
   }
 
   // Word token overlap check
-  const inputWords = cleanInput.split(' ').filter((w) => w.length >= 2);
-  const regWords = cleanReg.split(' ').filter((w) => w.length >= 2);
+  const inputWords = cleanInput.split(' ').filter((w) => w.length >= 1);
+  const regWords = cleanReg.split(' ').filter((w) => w.length >= 1);
 
   if (inputWords.length === 0 || regWords.length === 0) return false;
 
   // At least one significant name token (first or last name) must match
-  const hasCommonWord = inputWords.some((w) => regWords.includes(w));
+  const hasCommonWord = inputWords.some((w) => {
+    if (w.length >= 2) return regWords.includes(w);
+    return inputWords.length === 1 ? regWords.includes(w) : false;
+  });
   return hasCommonWord;
 }

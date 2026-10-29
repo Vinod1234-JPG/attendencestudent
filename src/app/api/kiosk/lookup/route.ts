@@ -201,44 +201,45 @@ export async function POST(request: Request) {
       }
     } else {
       // PhD Scholar: lookup by PhD ID (case-insensitive) or email
-      let scholarQuery = admin
+      const rawTrimmed = identifier.trim();
+      const cleanLower = rawTrimmed.toLowerCase();
+
+      // 1. Try exact / case-insensitive match on phd_id
+      const { data: byPhdId } = await admin
         .from('people')
         .select('id, name, category, phd_id, normalized_email, metadata')
-        .eq('category', 'phd_scholar');
-
-      // Try exact / case-insensitive match on phd_id
-      const { data: byPhdId } = await scholarQuery
-        .ilike('phd_id', normalized)
+        .eq('category', 'phd_scholar')
+        .ilike('phd_id', rawTrimmed)
         .maybeSingle();
 
       if (byPhdId) {
         person = byPhdId;
       } else {
-        // Also check if entered without leading zeros or with email
-        const { data: byAlt } = await admin
+        // 2. Try case-insensitive match on normalized_email
+        const { data: byEmail } = await admin
           .from('people')
           .select('id, name, category, phd_id, normalized_email, metadata')
           .eq('category', 'phd_scholar')
-          .or(`phd_id.ilike.%${identifier.trim()}%,normalized_email.ilike.%${identifier.trim()}%`)
-          .limit(1)
+          .ilike('normalized_email', cleanLower)
           .maybeSingle();
 
-        if (byAlt) {
-          person = byAlt;
+        if (byEmail) {
+          person = byEmail;
         } else {
-          // Check metadata for email
+          // 3. Check metadata for Email, USN, Roll No, or PhD ID (case-insensitive)
           const { data: allScholars } = await admin
             .from('people')
             .select('id, name, category, phd_id, normalized_email, metadata')
             .eq('category', 'phd_scholar');
 
-          const clean = identifier.trim().toLowerCase();
           person = (allScholars || []).find((s) => {
-            if (s.normalized_email && s.normalized_email.toLowerCase() === clean) return true;
-            if (s.phd_id && s.phd_id.toLowerCase() === clean) return true;
+            if (s.phd_id && s.phd_id.trim().toLowerCase() === cleanLower) return true;
+            if (s.normalized_email && s.normalized_email.trim().toLowerCase() === cleanLower) return true;
             if (s.metadata) {
               const mEmail = s.metadata.Email || s.metadata.email || s.metadata['Email ID'] || s.metadata['Email Address'];
-              if (mEmail && String(mEmail).trim().toLowerCase() === clean) return true;
+              if (mEmail && String(mEmail).trim().toLowerCase() === cleanLower) return true;
+              const mId = s.metadata.USN || s.metadata.usn || s.metadata['PhD ID'] || s.metadata['Ph.D ID'] || s.metadata.ID || s.metadata['Roll No'];
+              if (mId && String(mId).trim().toLowerCase() === cleanLower) return true;
             }
             return false;
           });

@@ -191,24 +191,55 @@ export default function KioskPage() {
     try {
       const db = getOfflineDb();
       let person = null;
+      const searchTarget = rawInput.trim().toLowerCase();
+      const allCached = await db.cached_people.where('category').equals(category).toArray();
 
-      if (category === 'guide') {
-        person = await db.cached_people
-          .where('normalized_email')
-          .equals(normalized)
-          .first();
-      } else {
-        person = await db.cached_people
-          .where('phd_id')
-          .equals(normalized)
-          .first();
-      }
+      person = allCached.find((p) => {
+        if (category === 'guide') {
+          if (p.normalized_email && p.normalized_email.trim().toLowerCase() === searchTarget) return true;
+          if (p.metadata) {
+            const mEmail = p.metadata.Email || p.metadata.email || p.metadata['Email ID'] || p.metadata['Email Address'];
+            if (mEmail && String(mEmail).trim().toLowerCase() === searchTarget) return true;
+          }
+          return false;
+        } else {
+          // PhD Scholar: check phd_id, email, or metadata (case-insensitive)
+          if (p.phd_id && p.phd_id.trim().toLowerCase() === searchTarget) return true;
+          if (p.normalized_email && p.normalized_email.trim().toLowerCase() === searchTarget) return true;
+          if (p.metadata) {
+            const mEmail = p.metadata.Email || p.metadata.email || p.metadata['Email ID'] || p.metadata['Email Address'];
+            if (mEmail && String(mEmail).trim().toLowerCase() === searchTarget) return true;
+            const mId = p.metadata.USN || p.metadata.usn || p.metadata['PhD ID'] || p.metadata['Ph.D ID'] || p.metadata.ID || p.metadata['Roll No'];
+            if (mId && String(mId).trim().toLowerCase() === searchTarget) return true;
+          }
+          return false;
+        }
+      });
 
       if (!person) {
+        // Also check if entered in alternate category offline
+        const allPeople = await db.cached_people.toArray();
+        const altPerson = allPeople.find((p) => {
+          if (p.normalized_email && p.normalized_email.trim().toLowerCase() === searchTarget) return true;
+          if (p.phd_id && p.phd_id.trim().toLowerCase() === searchTarget) return true;
+          if (p.metadata) {
+            const mEmail = p.metadata.Email || p.metadata.email || p.metadata['Email ID'];
+            if (mEmail && String(mEmail).trim().toLowerCase() === searchTarget) return true;
+          }
+          return false;
+        });
+
+        if (altPerson && altPerson.category !== category) {
+          const catLabel = altPerson.category === 'guide' ? 'Research Guide' : 'PhD Scholar';
+          setErrorMessage(`Found "${altPerson.name}" under ${catLabel}. Please select the "${catLabel}" button above.`);
+          setIsLoading(false);
+          return;
+        }
+
         setErrorMessage(
           category === 'guide'
-            ? 'Guide email not found. Please verify your registered email or contact the desk.'
-            : 'Official PhD ID not found. Please check your MRF PhD ID or contact the desk.'
+            ? 'Guide email not found on MRF website. Please verify your registered email address or contact the registration desk.'
+            : 'Official PhD ID or email not found on MRF website. Please check your registered MRF details or contact the registration desk.'
         );
         setIsLoading(false);
         return;

@@ -40,6 +40,32 @@ export default function ImportPage() {
   const [previewLimit, setPreviewLimit] = useState<number | 'all'>('all');
   const [previewSearch, setPreviewSearch] = useState('');
 
+  // Purge / Reset data states
+  const [isPurging, setIsPurging] = useState(false);
+  const [purgeSuccess, setPurgeSuccess] = useState<string | null>(null);
+  const [showPurgeConfirm, setShowPurgeConfirm] = useState(false);
+
+  const handlePurgeOldData = async () => {
+    setIsPurging(true);
+    setErrorMessage(null);
+    setPurgeSuccess(null);
+    try {
+      const res = await fetch('/api/admin/reset-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirm: 'PURGE_ALL_DATA' }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to remove old data.');
+      setPurgeSuccess(data.message || 'All old attendee and attendance records were successfully removed. You can now upload fresh data.');
+      setShowPurgeConfirm(false);
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Error occurred while purging old data.');
+    } finally {
+      setIsPurging(false);
+    }
+  };
+
   // Template generators
   const downloadTemplate = (cat: 'guide' | 'phd_scholar', format: 'csv' | 'xlsx') => {
     let data: any[] = [];
@@ -239,6 +265,76 @@ export default function ImportPage() {
         <div className="p-4 bg-[#C0393A]/10 border border-[#C0393A]/20 text-[#C0393A] rounded-lg text-xs flex items-center gap-2">
           <AlertTriangle className="w-4 h-4 shrink-0" />
           <span>{errorMessage}</span>
+        </div>
+      )}
+
+      {purgeSuccess && (
+        <div className="p-4 bg-[#16835D]/10 border border-[#16835D]/20 text-[#16835D] rounded-lg text-xs flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 shrink-0" />
+            <span>{purgeSuccess}</span>
+          </div>
+          <button
+            onClick={() => setPurgeSuccess(null)}
+            className="text-[11px] underline font-medium hover:text-[#0B1B30]"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {/* Fresh Start / Reset Old Data Banner */}
+      <div className="p-4 bg-white border border-[#E4E9F0] rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+        <div>
+          <h3 className="text-xs font-bold text-[#142D4E] flex items-center gap-1.5">
+            <Trash2 className="w-3.5 h-3.5 text-[#C0393A]" /> Start Fresh: Uploading New Attendee Lists?
+          </h3>
+          <p className="text-[11px] text-[#667085] mt-0.5">
+            Remove old test attendees, past check-ins, and previous records so you can upload fresh data without duplicate conflicts.
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setShowPurgeConfirm(true)}
+          className="border-[#C0393A]/30 text-[#C0393A] hover:bg-[#C0393A]/10 text-xs shrink-0"
+        >
+          <Trash2 className="w-3.5 h-3.5 mr-1.5" /> Remove Old Data
+        </Button>
+      </div>
+
+      {/* Confirmation Modal */}
+      {showPurgeConfirm && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-xl border border-[#E4E9F0] animate-in fade-in zoom-in-95">
+            <div className="w-10 h-10 rounded-full bg-[#C0393A]/10 text-[#C0393A] flex items-center justify-center mb-3">
+              <AlertTriangle className="w-5 h-5" />
+            </div>
+            <h3 className="text-base font-bold text-[#142D4E]">Confirm Database Wipe</h3>
+            <p className="text-xs text-[#667085] mt-2 leading-relaxed">
+              Are you sure you want to delete all existing Guides, PhD Scholars, test attendance records, and photos?
+              <br /><br />
+              <strong>This will completely clear the attendee database so you can upload your new Excel / CSV files cleanly.</strong> Active event and session configurations will remain intact.
+            </p>
+            <div className="flex items-center justify-end gap-2.5 mt-6">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowPurgeConfirm(false)}
+                disabled={isPurging}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={handlePurgeOldData}
+                isLoading={isPurging}
+              >
+                Yes, Remove All Old Data
+              </Button>
+            </div>
+          </div>
         </div>
       )}
 
