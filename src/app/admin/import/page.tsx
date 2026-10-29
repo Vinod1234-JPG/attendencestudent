@@ -50,10 +50,8 @@ export default function ImportPage() {
     setErrorMessage(null);
     setPurgeSuccess(null);
     try {
-      const res = await fetch('/api/admin/reset-data', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ confirm: 'PURGE_ALL_DATA' }),
+      const res = await fetch('/api/admin/attendees', {
+        method: 'DELETE',
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to remove old data.');

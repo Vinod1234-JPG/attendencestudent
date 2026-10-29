@@ -193,3 +193,63 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
+
+export async function DELETE() {
+  noStore();
+  try {
+    const isPlaceholder =
+      !process.env.NEXT_PUBLIC_SUPABASE_URL ||
+      process.env.NEXT_PUBLIC_SUPABASE_URL.includes('placeholder') ||
+      process.env.NEXT_PUBLIC_SUPABASE_URL.includes('your-project-id');
+
+    if (isPlaceholder) {
+      const devStore = getDevStorage();
+      const count = devStore.people.length;
+      devStore.people = [];
+      devStore.attendanceRecords = [];
+      return NextResponse.json({
+        success: true,
+        message: 'All old dev attendee data deleted.',
+        deletedCount: count,
+      });
+    }
+
+    const admin = createAdminClient();
+
+    // 1. Delete attendance_photos metadata
+    await admin.from('attendance_photos').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+
+    // 2. Delete attendance_records (due to foreign key constraint with people)
+    await admin.from('attendance_records').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+
+    // 3. Delete sync_conflicts
+    await admin.from('sync_conflicts').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+
+    // 4. Delete people
+    const { count: peopleCount } = await admin.from('people').select('*', { count: 'exact', head: true });
+    await admin.from('people').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+
+    // 5. Delete import errors and batches
+    await admin.from('import_errors').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    await admin.from('import_batches').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+
+    // 6. Delete storage objects
+    try {
+      const { data: files } = await admin.storage.from('mrf-attendance-photos').list('photos', { limit: 1000 });
+      if (files && files.length > 0) {
+        await admin.storage.from('mrf-attendance-photos').remove(files.map((f) => `photos/${f.name}`));
+      }
+    } catch (e) {
+      console.warn('Storage purge non-fatal:', e);
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: 'All old attendee records and test data successfully deleted.',
+      deletedPeople: peopleCount || 0,
+    });
+  } catch (err: any) {
+    console.error('Delete attendees error:', err);
+    return NextResponse.json({ error: err.message || 'Failed to delete attendees' }, { status: 500 });
+  }
+}
