@@ -19,7 +19,11 @@ import {
   Camera,
   User,
   Mail,
-  Award
+  Award,
+  ChevronDown,
+  Search,
+  X,
+  Sparkles,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -48,6 +52,16 @@ interface AttendeeData {
   extra_details?: Record<string, any>;
 }
 
+interface RegisteredAttendee {
+  id: string;
+  name: string;
+  category: 'guide' | 'phd_scholar';
+  email: string | null;
+  phd_id: string | null;
+  metadata?: Record<string, any>;
+  attended?: boolean;
+}
+
 export default function KioskPage() {
   const router = useRouter();
   const [step, setStep] = useState<KioskStep>('CAMERA_FIRST');
@@ -59,6 +73,14 @@ export default function KioskPage() {
   const [identifierInput, setIdentifierInput] = useState<string>('');
   const [attendee, setAttendee] = useState<AttendeeData | null>(null);
 
+  // Registered attendees for searchable dropdown
+  const [attendeesList, setAttendeesList] = useState<RegisteredAttendee[]>([]);
+  const [isLoadingAttendees, setIsLoadingAttendees] = useState<boolean>(false);
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [isDropdownOpen, setIsDropdownOpen] = useState<boolean>(false);
+  const [selectedAttendee, setSelectedAttendee] = useState<RegisteredAttendee | null>(null);
+  const dropdownRef = useRef<HTMLDivElement | null>(null);
+
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isOnline, setIsOnline] = useState<boolean>(true);
@@ -68,11 +90,81 @@ export default function KioskPage() {
 
   const resetTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Monitor network and offline data readiness
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  // Fetch attendees list for dropdown (online with offline fallback)
+  const loadAttendees = async () => {
+    setIsLoadingAttendees(true);
+    try {
+      if (typeof window !== 'undefined' && navigator.onLine) {
+        const res = await fetch('/api/kiosk/attendees-list');
+        const data = await res.json();
+        if (res.ok && data.success && Array.isArray(data.attendees)) {
+          setAttendeesList(data.attendees);
+
+          // Update local IndexedDB cache in background
+          try {
+            const db = getOfflineDb();
+            const toCache = data.attendees.map((a: any) => ({
+              id: a.id,
+              category: a.category,
+              name: a.name,
+              normalized_email: a.email,
+              phd_id: a.phd_id,
+              metadata: a.metadata || {},
+            }));
+            await db.cached_people.bulkPut(toCache);
+          } catch {}
+
+          setIsLoadingAttendees(false);
+          return;
+        }
+      }
+
+      // Offline fallback: load from IndexedDB
+      const db = getOfflineDb();
+      const cached = await db.cached_people.toArray();
+      const mapped: RegisteredAttendee[] = cached.map((c) => ({
+        id: c.id,
+        name: c.name,
+        category: c.category,
+        email: c.normalized_email || c.metadata?.Email || c.metadata?.email || null,
+        phd_id:
+          c.phd_id ||
+          c.metadata?.['PhD ID'] ||
+          c.metadata?.['Ph.D ID'] ||
+          c.metadata?.USN ||
+          null,
+        metadata: c.metadata || {},
+        attended: false,
+      }));
+      setAttendeesList(mapped);
+    } catch (e) {
+      console.warn('Could not load attendees for dropdown:', e);
+    } finally {
+      setIsLoadingAttendees(false);
+    }
+  };
+
+  // Monitor network, offline data readiness, and load initial attendees
   useEffect(() => {
     if (typeof window !== 'undefined') {
       setIsOnline(navigator.onLine);
-      const handleOnline = () => setIsOnline(true);
+      const handleOnline = () => {
+        setIsOnline(true);
+        loadAttendees();
+      };
       const handleOffline = () => setIsOnline(false);
 
       window.addEventListener('online', handleOnline);
@@ -89,6 +181,7 @@ export default function KioskPage() {
         }
       };
       checkOfflineReadiness();
+      loadAttendees();
 
       return () => {
         window.removeEventListener('online', handleOnline);
@@ -108,6 +201,9 @@ export default function KioskPage() {
     setCategory('guide');
     setNameInput('');
     setIdentifierInput('');
+    setSelectedAttendee(null);
+    setSearchQuery('');
+    setIsDropdownOpen(false);
     setAttendee(null);
     setCapturedBlob(null);
     setCapturedDataUrl(null);
@@ -122,20 +218,81 @@ export default function KioskPage() {
     setCapturedBlob(blob);
     setCapturedDataUrl(dataUrl);
     setStep('DETAILS_WITH_PHOTO');
+    if (attendeesList.length === 0) {
+      loadAttendees();
+    }
   };
+
+  // Handle selecting an attendee from the dropdown
+  const handleSelectAttendee = (att: RegisteredAttendee) => {
+    setSelectedAttendee(att);
+    setNameInput(att.name);
+
+    if (att.category === 'guide') {
+      const email =
+        att.email ||
+        att.metadata?.Email ||
+        att.metadata?.email ||
+        att.metadata?.['Email ID'] ||
+        att.metadata?.['Email Address'] ||
+        '';
+      setIdentifierInput(email);
+    } else {
+      const identifier =
+        att.phd_id ||
+        att.metadata?.['PhD ID'] ||
+        att.metadata?.['Ph.D ID'] ||
+        att.metadata?.USN ||
+        att.metadata?.usn ||
+        att.email ||
+        att.metadata?.Email ||
+        '';
+      setIdentifierInput(identifier);
+    }
+
+    setErrorMessage(null);
+    setIsDropdownOpen(false);
+    setSearchQuery('');
+  };
+
+  const handleClearSelectedAttendee = () => {
+    setSelectedAttendee(null);
+    setNameInput('');
+    setIdentifierInput('');
+    setSearchQuery('');
+  };
+
+  // Filter attendees by currently active category and search text
+  const categoryAttendees = attendeesList.filter((a) => a.category === category);
+
+  const filteredAttendees = categoryAttendees.filter((a) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase().trim();
+    const nameMatch = a.name.toLowerCase().includes(q);
+    const emailMatch = a.email ? a.email.toLowerCase().includes(q) : false;
+    const phdMatch = a.phd_id ? a.phd_id.toLowerCase().includes(q) : false;
+    const deptMatch = a.metadata?.Department
+      ? String(a.metadata.Department).toLowerCase().includes(q)
+      : false;
+    const guideMatch =
+      a.metadata?.Guide || a.metadata?.['Guide Name']
+        ? String(a.metadata.Guide || a.metadata['Guide Name']).toLowerCase().includes(q)
+        : false;
+    return nameMatch || emailMatch || phdMatch || deptMatch || guideMatch;
+  });
 
   // STEP 2: Submit Details while photo is clearly visible
   const handleDetailsSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!nameInput.trim()) {
-      setErrorMessage('Please enter your full name.');
+      setErrorMessage('Please enter your full name or select your profile from the dropdown above.');
       return;
     }
     if (!identifierInput.trim()) {
       setErrorMessage(
         category === 'guide'
-          ? 'Please enter your registered email address.'
-          : 'Please enter your official PhD ID.'
+          ? 'Please enter your registered email address or select your profile from the dropdown above.'
+          : 'Please enter your official PhD ID or email, or select your profile from the dropdown above.'
       );
       return;
     }
@@ -238,8 +395,8 @@ export default function KioskPage() {
 
         setErrorMessage(
           category === 'guide'
-            ? 'Guide email not found on MRF website. Please verify your registered email address or contact the registration desk.'
-            : 'Official PhD ID or email not found on MRF website. Please check your registered MRF details or contact the registration desk.'
+            ? 'Guide email not found on MRF website. Please select your name from the dropdown or verify your registered email.'
+            : 'PhD ID or email not found on MRF website. Please select your name from the dropdown or verify your registered details.'
         );
         setIsLoading(false);
         return;
@@ -422,7 +579,7 @@ export default function KioskPage() {
       </header>
 
       {/* Main Kiosk Content Area */}
-      <main className="flex-1 flex items-center justify-center p-6">
+      <main className="flex-1 flex items-center justify-center p-4 md:p-6">
         <div className="w-full max-w-4xl bg-white border border-[#E4E9F0] rounded-2xl shadow-sm p-6 md:p-10 transition-all">
           {/* STEP 1: PHOTO CAPTURE FIRST */}
           {step === 'CAMERA_FIRST' && (
@@ -495,10 +652,10 @@ export default function KioskPage() {
                   </span>
                 </div>
 
-                {/* Right Side: Category Selection & Inputs */}
-                <div className="md:col-span-7 space-y-5">
+                {/* Right Side: Category Selection, Dropdown & Inputs */}
+                <div className="md:col-span-7 space-y-4">
                   {/* Category Switcher */}
-                  <div className="space-y-2.5">
+                  <div className="space-y-2">
                     <label className="text-xs font-bold text-[#182230] block">
                       Select Your Category:
                     </label>
@@ -508,8 +665,13 @@ export default function KioskPage() {
                         onClick={() => {
                           setCategory('guide');
                           setErrorMessage(null);
+                          setSelectedAttendee(null);
+                          setNameInput('');
+                          setIdentifierInput('');
+                          setSearchQuery('');
+                          setIsDropdownOpen(false);
                         }}
-                        className={`p-3.5 rounded-lg border text-left flex items-center gap-2.5 transition-all ${
+                        className={`p-3 rounded-lg border text-left flex items-center gap-2.5 transition-all ${
                           category === 'guide'
                             ? 'border-[#2864B4] bg-[#EAF2FC] text-[#142D4E] font-bold shadow-xs ring-1 ring-[#2864B4]'
                             : 'border-[#E4E9F0] bg-white text-[#667085] hover:bg-[#F7F9FC]'
@@ -524,8 +686,13 @@ export default function KioskPage() {
                         onClick={() => {
                           setCategory('phd_scholar');
                           setErrorMessage(null);
+                          setSelectedAttendee(null);
+                          setNameInput('');
+                          setIdentifierInput('');
+                          setSearchQuery('');
+                          setIsDropdownOpen(false);
                         }}
-                        className={`p-3.5 rounded-lg border text-left flex items-center gap-2.5 transition-all ${
+                        className={`p-3 rounded-lg border text-left flex items-center gap-2.5 transition-all ${
                           category === 'phd_scholar'
                             ? 'border-[#2864B4] bg-[#EAF2FC] text-[#142D4E] font-bold shadow-xs ring-1 ring-[#2864B4]'
                             : 'border-[#E4E9F0] bg-white text-[#667085] hover:bg-[#F7F9FC]'
@@ -535,55 +702,263 @@ export default function KioskPage() {
                         <span className="text-xs font-semibold">PhD Scholar</span>
                       </button>
                     </div>
+                  </div>
 
-                    {/* Active Category Indicator Banner */}
-                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#EAF2FC]/70 border border-[#2864B4]/20 text-[#142D4E] text-xs">
-                      {category === 'guide' ? (
-                        <>
-                          <BookOpen className="w-3.5 h-3.5 text-[#2864B4] shrink-0" />
-                          <span>Showing inputs for: <strong>Research Guide</strong></span>
-                        </>
+                  {/* Searchable Dropdown: Select From Database (Auto-Fill) */}
+                  <div className="space-y-1.5" ref={dropdownRef}>
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-[#142D4E] flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-[#2864B4]" />
+                        Quick Select from Database (Auto-fill Name &amp; ID):
+                      </label>
+                      <button
+                        type="button"
+                        onClick={loadAttendees}
+                        disabled={isLoadingAttendees}
+                        className="text-[11px] text-[#2864B4] hover:underline flex items-center gap-1"
+                        title="Reload attendees from database"
+                      >
+                        <RefreshCw className={`w-3 h-3 ${isLoadingAttendees ? 'animate-spin' : ''}`} />
+                        <span>{isLoadingAttendees ? 'Loading...' : 'Refresh List'}</span>
+                      </button>
+                    </div>
+
+                    <div className="relative">
+                      {/* Dropdown Trigger Box */}
+                      {selectedAttendee ? (
+                        <div className="p-3 bg-[#EAF7EE] border-2 border-[#16835D] rounded-lg flex items-center justify-between shadow-2xs">
+                          <div className="flex items-center gap-2.5 overflow-hidden">
+                            <div className="w-8 h-8 rounded-full bg-[#16835D]/15 text-[#16835D] flex items-center justify-center font-bold text-xs shrink-0">
+                              <CheckCircle2 className="w-4 h-4" />
+                            </div>
+                            <div className="overflow-hidden">
+                              <p className="text-xs font-bold text-[#142D4E] truncate">
+                                {selectedAttendee.name}
+                              </p>
+                              <p className="text-[11px] font-mono text-[#16835D] truncate">
+                                {category === 'guide'
+                                  ? selectedAttendee.email
+                                  : `ID: ${selectedAttendee.phd_id || selectedAttendee.email || '—'}`}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                              className="text-[11px] h-7 px-2 border-[#16835D]/30 text-[#16835D] hover:bg-white"
+                            >
+                              Change
+                            </Button>
+                            <button
+                              type="button"
+                              onClick={handleClearSelectedAttendee}
+                              className="p-1 hover:bg-[#16835D]/20 rounded text-[#16835D]"
+                              title="Clear selection"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
                       ) : (
-                        <>
-                          <GraduationCap className="w-3.5 h-3.5 text-[#2864B4] shrink-0" />
-                          <span>Showing inputs for: <strong>PhD Scholar</strong></span>
-                        </>
+                        <button
+                          type="button"
+                          onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                          className="w-full p-3 bg-white border-2 border-[#CBD5E1] hover:border-[#2864B4] rounded-lg text-left flex items-center justify-between shadow-2xs transition-all focus:outline-none focus:ring-2 focus:ring-[#2864B4]/20"
+                        >
+                          <div className="flex items-center gap-2 text-xs text-[#667085]">
+                            <Search className="w-4 h-4 text-[#2864B4]" />
+                            <span>
+                              {categoryAttendees.length > 0
+                                ? `Click to choose ${category === 'guide' ? 'Guide' : 'PhD Scholar'} from ${categoryAttendees.length} records...`
+                                : `No registered ${category === 'guide' ? 'guides' : 'scholars'} in database (Enter manually below)`}
+                            </span>
+                          </div>
+                          <ChevronDown
+                            className={`w-4 h-4 text-[#667085] transition-transform ${
+                              isDropdownOpen ? 'rotate-180' : ''
+                            }`}
+                          />
+                        </button>
+                      )}
+
+                      {/* Dropdown Menu Popover */}
+                      {isDropdownOpen && (
+                        <div className="absolute z-50 left-0 right-0 mt-1 bg-white border-2 border-[#2864B4] rounded-xl shadow-xl overflow-hidden animate-fadeIn">
+                          {/* Search Input Inside Dropdown */}
+                          <div className="p-2.5 bg-[#F7F9FC] border-b border-[#E4E9F0] flex items-center gap-2">
+                            <Search className="w-4 h-4 text-[#667085] shrink-0" />
+                            <input
+                              type="text"
+                              autoFocus
+                              placeholder={`Type name, email, or PhD ID to search...`}
+                              value={searchQuery}
+                              onChange={(e) => setSearchQuery(e.target.value)}
+                              className="w-full bg-transparent text-xs text-[#182230] placeholder-[#94A3B8] focus:outline-none"
+                            />
+                            {searchQuery && (
+                              <button
+                                type="button"
+                                onClick={() => setSearchQuery('')}
+                                className="p-1 hover:bg-[#E4E9F0] rounded text-[#667085]"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+
+                          {/* List count summary */}
+                          <div className="px-3 py-1.5 bg-[#EAF2FC]/50 text-[11px] text-[#2864B4] font-medium border-b border-[#E4E9F0] flex items-center justify-between">
+                            <span>
+                              Showing {filteredAttendees.length} of {categoryAttendees.length} registered {category === 'guide' ? 'Guides' : 'PhD Scholars'}
+                            </span>
+                            {searchQuery && (
+                              <span className="text-[10px] text-[#667085]">Filtered by &ldquo;{searchQuery}&rdquo;</span>
+                            )}
+                          </div>
+
+                          {/* Attendees List */}
+                          <div className="max-h-60 overflow-y-auto divide-y divide-[#E4E9F0]">
+                            {filteredAttendees.length === 0 ? (
+                              <div className="p-4 text-center text-xs text-[#667085]">
+                                <p className="font-semibold text-[#142D4E]">No matches found.</p>
+                                <p className="mt-1 text-[11px]">
+                                  {categoryAttendees.length === 0
+                                    ? 'No attendees are loaded in this category yet. You can type your name and email/PhD ID manually below.'
+                                    : 'No attendee matches your search filter. You can type your details manually below.'}
+                                </p>
+                              </div>
+                            ) : (
+                              filteredAttendees.map((att) => {
+                                const isSelected = selectedAttendee?.id === att.id;
+                                const dept =
+                                  att.metadata?.Department ||
+                                  att.metadata?.department ||
+                                  att.metadata?.Affiliation ||
+                                  att.metadata?.College;
+                                const guide =
+                                  att.metadata?.Guide ||
+                                  att.metadata?.['Guide Name'] ||
+                                  att.metadata?.guide;
+
+                                return (
+                                  <button
+                                    type="button"
+                                    key={att.id}
+                                    onClick={() => handleSelectAttendee(att)}
+                                    className={`w-full p-2.5 text-left flex items-center justify-between gap-2 hover:bg-[#F0F5FC] transition-colors ${
+                                      isSelected ? 'bg-[#EAF2FC]' : ''
+                                    }`}
+                                  >
+                                    <div className="min-w-0 flex items-center gap-2.5">
+                                      <div className="w-7 h-7 rounded-full bg-[#142D4E] text-white flex items-center justify-center font-bold text-xs shrink-0">
+                                        {att.name.charAt(0).toUpperCase()}
+                                      </div>
+                                      <div className="min-w-0">
+                                        <p className="text-xs font-bold text-[#142D4E] truncate">
+                                          {att.name}
+                                        </p>
+                                        <div className="flex items-center gap-2 text-[11px] text-[#667085] truncate">
+                                          {att.category === 'guide' ? (
+                                            <span className="font-mono text-[#2864B4]">{att.email || '—'}</span>
+                                          ) : (
+                                            <>
+                                              {att.phd_id && (
+                                                <span className="font-mono font-semibold text-[#2864B4]">
+                                                  ID: {att.phd_id}
+                                                </span>
+                                              )}
+                                              {att.email && (
+                                                <span className="font-mono truncate">{att.email}</span>
+                                              )}
+                                            </>
+                                          )}
+                                        </div>
+                                        {(dept || guide) && (
+                                          <p className="text-[10px] text-[#94A3B8] truncate">
+                                            {dept ? `Dept: ${dept}` : ''}
+                                            {dept && guide ? ' • ' : ''}
+                                            {guide ? `Guide: ${guide}` : ''}
+                                          </p>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    <div className="shrink-0 flex items-center gap-1.5">
+                                      {att.attended ? (
+                                        <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-[#B7791F]/15 text-[#B7791F]">
+                                          Attended
+                                        </span>
+                                      ) : (
+                                        <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-[#EAF2FC] text-[#2864B4]">
+                                          Auto-fill
+                                        </span>
+                                      )}
+                                    </div>
+                                  </button>
+                                );
+                              })
+                            )}
+                          </div>
+                        </div>
                       )}
                     </div>
                   </div>
 
-                  {/* Form Inputs */}
-                  <form onSubmit={handleDetailsSubmit} className="space-y-4">
-                    <Input
-                      label="Full Name (as per MRF Website)"
-                      placeholder="Enter full name as registered on MRF website"
-                      helperText="Please enter your full name exactly as registered on the MRF website."
-                      value={nameInput}
-                      onChange={(e) => setNameInput(e.target.value)}
-                      required
-                    />
+                  {/* Form Inputs (Auto-filled or Manual Entry) */}
+                  <form onSubmit={handleDetailsSubmit} className="space-y-3.5 pt-1">
+                    <div>
+                      <Input
+                        label="Full Name (as per MRF Website) *"
+                        placeholder="Enter full name as registered on MRF website"
+                        helperText={
+                          selectedAttendee
+                            ? '✓ Auto-filled from MRF database. You can edit if needed.'
+                            : 'Enter full name, or choose from the dropdown above.'
+                        }
+                        value={nameInput}
+                        onChange={(e) => {
+                          setNameInput(e.target.value);
+                          if (selectedAttendee && e.target.value !== selectedAttendee.name) {
+                            setSelectedAttendee(null);
+                          }
+                        }}
+                        required
+                      />
+                    </div>
 
-                    <Input
-                      label={
-                        category === 'guide'
-                          ? 'Registered Email Address (MRF Email)'
-                          : 'Registered Email Address / PhD ID (as per MRF Website)'
-                      }
-                      placeholder={
-                        category === 'guide'
-                          ? 'Enter registered MRF email address'
-                          : 'Enter registered MRF email address or PhD ID (e.g. 17)'
-                      }
-                      helperText={
-                        category === 'guide'
-                          ? 'Please enter your registered MRF email address.'
-                          : 'Please enter your registered MRF email address or official PhD ID.'
-                      }
-                      type={category === 'guide' ? 'email' : 'text'}
-                      value={identifierInput}
-                      onChange={(e) => setIdentifierInput(e.target.value)}
-                      required
-                    />
+                    <div>
+                      <Input
+                        label={
+                          category === 'guide'
+                            ? 'Registered Email Address (MRF Email) *'
+                            : 'Registered Email Address / PhD ID (as per MRF Website) *'
+                        }
+                        placeholder={
+                          category === 'guide'
+                            ? 'Enter registered MRF email address'
+                            : 'Enter registered MRF email address or PhD ID (e.g. 17)'
+                        }
+                        helperText={
+                          selectedAttendee
+                            ? '✓ Auto-filled from MRF database. You can edit if needed.'
+                            : category === 'guide'
+                            ? 'Please enter your registered MRF email address.'
+                            : 'Please enter your registered MRF email address or official PhD ID.'
+                        }
+                        type={category === 'guide' ? 'email' : 'text'}
+                        value={identifierInput}
+                        onChange={(e) => {
+                          setIdentifierInput(e.target.value);
+                          if (selectedAttendee) {
+                            setSelectedAttendee(null);
+                          }
+                        }}
+                        required
+                      />
+                    </div>
 
                     {errorMessage && (
                       <div className="p-3 bg-[#C0393A]/10 border border-[#C0393A]/20 rounded-md flex items-center gap-2 text-xs font-medium text-[#C0393A]">
@@ -597,7 +972,7 @@ export default function KioskPage() {
                         type="submit"
                         variant="primary"
                         size="lg"
-                        className="w-full shadow-sm"
+                        className="w-full shadow-sm bg-[#142D4E] hover:bg-[#1E4D8C] text-white py-3.5 text-sm font-bold"
                         isLoading={isLoading}
                       >
                         Proceed to Confirm <ArrowRight className="w-4 h-4 ml-1.5" />
@@ -703,7 +1078,7 @@ export default function KioskPage() {
                 <Button
                   variant="primary"
                   size="lg"
-                  className="flex-1 shadow-md"
+                  className="flex-1 shadow-md bg-[#142D4E] hover:bg-[#1E4D8C] text-white font-bold"
                   onClick={handleConfirmAndSubmit}
                   isLoading={isLoading}
                 >
@@ -778,7 +1153,7 @@ export default function KioskPage() {
                   variant="primary"
                   size="xl"
                   onClick={handleReset}
-                  className="w-full max-w-xs shadow-md"
+                  className="w-full max-w-xs shadow-md bg-[#142D4E] hover:bg-[#1E4D8C] text-white font-bold"
                 >
                   Start Next Attendance
                 </Button>
@@ -798,4 +1173,3 @@ export default function KioskPage() {
     </div>
   );
 }
-
