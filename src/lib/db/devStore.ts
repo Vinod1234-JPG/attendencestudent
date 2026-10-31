@@ -125,6 +125,22 @@ export function addDevAttendanceRecord(record: DevAttendeeRecord) {
   saveStorage(store);
 }
 
+export function removeDevAttendanceRecord(idOrPersonId: string): boolean {
+  const store = loadStorage();
+  const initialLen = store.attendanceRecords.length;
+  store.attendanceRecords = store.attendanceRecords.filter(
+    (r) =>
+      r.id !== idOrPersonId &&
+      r.attendee.id !== idOrPersonId &&
+      r.operation_id !== idOrPersonId
+  );
+  if (store.attendanceRecords.length !== initialLen) {
+    saveStorage(store);
+    return true;
+  }
+  return false;
+}
+
 export function addDevPeople(newPeople: DevPerson[]) {
   const store = loadStorage();
   const existingMap = new Map(store.people.map((p) => [p.id, p]));

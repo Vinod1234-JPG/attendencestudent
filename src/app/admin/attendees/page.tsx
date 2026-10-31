@@ -17,7 +17,9 @@ import {
   Eye,
   Shield,
   Award,
-  X
+  X,
+  Trash2,
+  AlertTriangle
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -55,6 +57,14 @@ export default function RegisteredAttendeesPage() {
   searchRef.current = debouncedSearch;
 
   const [selectedAttendee, setSelectedAttendee] = useState<Attendee | null>(null);
+
+  // Revoke attendance modal states
+  const [revokeConfirmAttendee, setRevokeConfirmAttendee] = useState<Attendee | null>(null);
+  const [isRevoking, setIsRevoking] = useState<boolean>(false);
+  const [actionFeedback, setActionFeedback] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
 
   // Auto-debounce search as user types after 250ms
   useEffect(() => {
@@ -118,157 +128,231 @@ export default function RegisteredAttendeesPage() {
     fetchAttendees('');
   };
 
+  // Safe removal of attendance record only (preserves person in `people` table)
+  const handleRevokeAttendance = async () => {
+    if (!revokeConfirmAttendee) return;
+    setIsRevoking(true);
+    setActionFeedback(null);
+
+    try {
+      const res = await fetch(`/api/attendance?person_id=${encodeURIComponent(revokeConfirmAttendee.id)}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        setActionFeedback({
+          type: 'success',
+          message: `Attendance for "${revokeConfirmAttendee.name}" removed successfully. Status reset to Pending.`,
+        });
+        setRevokeConfirmAttendee(null);
+        setSelectedAttendee(null);
+        fetchAttendees(searchRef.current);
+      } else {
+        setActionFeedback({
+          type: 'error',
+          message: data.error || 'Failed to remove attendance record.',
+        });
+      }
+    } catch (e: any) {
+      setActionFeedback({
+        type: 'error',
+        message: e.message || 'Network error while removing attendance.',
+      });
+    } finally {
+      setIsRevoking(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Page Title & Actions */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-extrabold text-[#142D4E]">All Registered Attendees</h1>
+          <h1 className="text-2xl font-extrabold text-[#142D4E]">Registered Attendees</h1>
           <p className="text-xs text-[#667085] mt-1">
-            Complete registry of Research Guides and PhD Scholars with their names, registered email addresses, and check-in status.
+            Directory of Guides and PhD Scholars enrolled for the MRF Research Retreat.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+
+        <div className="flex items-center gap-3">
           <Link href="/admin/import">
-            <Button variant="outline" size="sm">
-              <Upload className="w-3.5 h-3.5 mr-1.5" /> Upload More Data
+            <Button variant="primary" size="sm" className="flex items-center gap-1.5">
+              <Upload className="w-3.5 h-3.5" />
+              <span>Import Attendees</span>
             </Button>
           </Link>
-          <Button variant="primary" size="sm" onClick={() => fetchAttendees(searchRef.current)} isLoading={isLoading}>
-            <RefreshCw className="w-3.5 h-3.5 mr-1.5" /> Refresh Registry
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => fetchAttendees(searchRef.current)}
+            className="flex items-center gap-1.5"
+            disabled={isLoading}
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+            <span>Refresh</span>
           </Button>
         </div>
       </div>
 
-      {/* Metric Cards Row */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-        <Card className="p-4 bg-white border border-[#E4E9F0]">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-[#EAF2FC] flex items-center justify-center text-[#2864B4]">
-              <Users className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-[11px] font-semibold text-[#667085] uppercase tracking-wider">Total Registered</p>
-              <p className="text-xl font-bold text-[#142D4E]">{counts.total}</p>
-            </div>
+      {/* Action Feedback Banner */}
+      {actionFeedback && (
+        <div
+          className={`p-4 rounded-xl border flex items-center justify-between animate-fadeIn ${
+            actionFeedback.type === 'success'
+              ? 'bg-[#16835D]/10 border-[#16835D]/30 text-[#16835D]'
+              : 'bg-[#C0393A]/10 border-[#C0393A]/30 text-[#C0393A]'
+          }`}
+        >
+          <div className="flex items-center gap-2 text-xs font-semibold">
+            {actionFeedback.type === 'success' ? (
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+            ) : (
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+            )}
+            <span>{actionFeedback.message}</span>
           </div>
-        </Card>
+          <button
+            onClick={() => setActionFeedback(null)}
+            className="p-1 hover:bg-black/5 rounded text-current"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
-        <Card className="p-4 bg-white border border-[#E4E9F0]">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-[#EAF2FC] flex items-center justify-center text-[#2864B4]">
-              <BookOpen className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-[11px] font-semibold text-[#667085] uppercase tracking-wider">Guides</p>
-              <p className="text-xl font-bold text-[#142D4E]">{counts.guides}</p>
-            </div>
-          </div>
+      {/* Summary KPI Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        <Card className="p-4 bg-white">
+          <p className="text-[11px] font-semibold text-[#667085]">Total Registered</p>
+          <p className="text-2xl font-black text-[#142D4E] mt-1">{counts.total}</p>
         </Card>
-
-        <Card className="p-4 bg-white border border-[#E4E9F0]">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-[#FEF3F2] flex items-center justify-center text-[#B42318]">
-              <GraduationCap className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-[11px] font-semibold text-[#667085] uppercase tracking-wider">PhD Scholars</p>
-              <p className="text-xl font-bold text-[#142D4E]">{counts.scholars}</p>
-            </div>
-          </div>
+        <Card className="p-4 bg-white">
+          <p className="text-[11px] font-semibold text-[#667085] flex items-center gap-1">
+            <BookOpen className="w-3 h-3 text-[#2864B4]" /> Guides
+          </p>
+          <p className="text-2xl font-black text-[#2864B4] mt-1">{counts.guides}</p>
         </Card>
-
-        <Card className="p-4 bg-white border border-[#E4E9F0]">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-[#ECFDF3] flex items-center justify-center text-[#027A48]">
-              <CheckCircle2 className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-[11px] font-semibold text-[#667085] uppercase tracking-wider">Attended</p>
-              <p className="text-xl font-bold text-[#027A48]">{counts.attended}</p>
-            </div>
-          </div>
+        <Card className="p-4 bg-white">
+          <p className="text-[11px] font-semibold text-[#667085] flex items-center gap-1">
+            <GraduationCap className="w-3 h-3 text-[#E65100]" /> PhD Scholars
+          </p>
+          <p className="text-2xl font-black text-[#E65100] mt-1">{counts.scholars}</p>
         </Card>
-
-        <Card className="p-4 bg-white border border-[#E4E9F0]">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-[#FFFAEB] flex items-center justify-center text-[#B54708]">
-              <Clock className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-[11px] font-semibold text-[#667085] uppercase tracking-wider">Pending</p>
-              <p className="text-xl font-bold text-[#B54708]">{counts.pending}</p>
-            </div>
-          </div>
+        <Card className="p-4 bg-white border-l-4 border-l-[#16835D]">
+          <p className="text-[11px] font-semibold text-[#667085] flex items-center gap-1">
+            <CheckCircle2 className="w-3 h-3 text-[#16835D]" /> Attended
+          </p>
+          <p className="text-2xl font-black text-[#16835D] mt-1">{counts.attended}</p>
+        </Card>
+        <Card className="p-4 bg-white border-l-4 border-l-[#D97706]">
+          <p className="text-[11px] font-semibold text-[#667085] flex items-center gap-1">
+            <Clock className="w-3 h-3 text-[#D97706]" /> Pending Check-in
+          </p>
+          <p className="text-2xl font-black text-[#D97706] mt-1">{counts.pending}</p>
         </Card>
       </div>
 
-      {/* Filter and Search Bar */}
-      <Card className="p-4">
-        <form onSubmit={handleSearchSubmit} className="flex flex-col sm:flex-row items-center gap-3">
-          <div className="relative flex-1 w-full">
+      {/* Filters and Search Bar */}
+      <Card>
+        <CardContent className="p-4 space-y-4 md:space-y-0 md:flex md:items-center md:justify-between gap-4">
+          {/* Real-time Debounced Search */}
+          <form onSubmit={handleSearchSubmit} className="relative flex-1 max-w-md flex items-center">
             <Search className="w-4 h-4 absolute left-3 top-3 text-[#667085]" />
             <input
               type="text"
-              placeholder="Search by attendee name, email address, or PhD ID..."
+              placeholder="Search by name, email, or PhD ID (instant filter)..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-9 py-2 text-xs rounded-md border border-[#E4E9F0] focus:outline-none focus:ring-1 focus:ring-[#2864B4]"
+              className="w-full pl-9 pr-9 py-2 bg-[#F7F9FC] border border-[#E4E9F0] rounded-lg text-xs text-[#182230] placeholder-[#667085] focus:outline-none focus:border-[#2864B4] focus:ring-1 focus:ring-[#2864B4]"
             />
             {search && (
               <button
                 type="button"
                 onClick={handleClearSearch}
-                className="absolute right-3 top-2.5 text-[#98A2B3] hover:text-[#182230]"
-                title="Clear search"
+                className="absolute right-3 top-2.5 text-[#667085] hover:text-[#182230]"
               >
                 <X className="w-4 h-4" />
               </button>
             )}
+          </form>
+
+          {/* Filter Pills */}
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Category Filter */}
+            <div className="flex items-center gap-1">
+              <span className="text-xs text-[#667085] font-medium mr-1">Category:</span>
+              <div className="inline-flex p-1 bg-[#EEF1F5] rounded-lg border border-[#E4E9F0]">
+                {['all', 'guide', 'phd_scholar'].map((cat) => (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setCategoryFilter(cat)}
+                    className={`px-2.5 py-1 text-xs font-semibold rounded-md capitalize transition-all ${
+                      categoryFilter === cat
+                        ? 'bg-white text-[#142D4E] shadow-2xs'
+                        : 'text-[#667085] hover:text-[#182230]'
+                    }`}
+                  >
+                    {cat === 'all' ? 'All' : cat === 'guide' ? 'Guides' : 'Scholars'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Attendance Status Filter */}
+            <div className="flex items-center gap-1">
+              <span className="text-xs text-[#667085] font-medium mr-1">Status:</span>
+              <div className="inline-flex p-1 bg-[#EEF1F5] rounded-lg border border-[#E4E9F0]">
+                {[
+                  { key: 'all', label: 'All' },
+                  { key: 'attended', label: 'Attended' },
+                  { key: 'pending', label: 'Pending' },
+                ].map((s) => (
+                  <button
+                    key={s.key}
+                    type="button"
+                    onClick={() => setStatusFilter(s.key)}
+                    className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-all ${
+                      statusFilter === s.key
+                        ? 'bg-white text-[#142D4E] shadow-2xs'
+                        : 'text-[#667085] hover:text-[#182230]'
+                    }`}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
-
-          <div className="flex items-center gap-2 w-full sm:w-auto">
-            <select
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
-              className="px-3 py-2 text-xs rounded-md border border-[#E4E9F0] bg-white text-[#182230] focus:outline-none focus:ring-1 focus:ring-[#2864B4]"
-            >
-              <option value="all">All Categories ({counts.total})</option>
-              <option value="guide">Research Guides ({counts.guides})</option>
-              <option value="phd_scholar">PhD Scholars ({counts.scholars})</option>
-            </select>
-
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-3 py-2 text-xs rounded-md border border-[#E4E9F0] bg-white text-[#182230] focus:outline-none focus:ring-1 focus:ring-[#2864B4]"
-            >
-              <option value="all">All Statuses</option>
-              <option value="attended">Attended ({counts.attended})</option>
-              <option value="pending">Pending ({counts.pending})</option>
-            </select>
-
-            <Button type="submit" variant="primary" size="sm">
-              Search
-            </Button>
-          </div>
-        </form>
+        </CardContent>
       </Card>
 
       {/* Attendees Table */}
       <Card>
+        <CardHeader className="border-b border-[#E4E9F0] pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm font-bold text-[#142D4E]">
+              Registered Enrolment Roster ({attendees.length})
+            </CardTitle>
+            <span className="text-xs text-[#667085]">
+              Active Event: <strong>MRF Research Retreat</strong>
+            </span>
+          </div>
+        </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-[#F7F9FC] text-[#667085] border-b border-[#E4E9F0]">
-                <tr>
-                  <th className="px-6 py-3 font-semibold">Attendee Name</th>
-                  <th className="px-6 py-3 font-semibold">Category</th>
-                  <th className="px-6 py-3 font-semibold">Email Address / Identifier</th>
-                  <th className="px-6 py-3 font-semibold">Department / Affiliation</th>
-                  <th className="px-6 py-3 font-semibold">Attendance Status</th>
-                  <th className="px-6 py-3 font-semibold">Photo</th>
-                  <th className="px-6 py-3 font-semibold text-right">Action</th>
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="border-b border-[#E4E9F0] bg-[#F7F9FC] text-[#667085] font-semibold">
+                  <th className="px-6 py-3.5">Name</th>
+                  <th className="px-6 py-3.5">Category</th>
+                  <th className="px-6 py-3.5">Registered Email / PhD ID</th>
+                  <th className="px-6 py-3.5">Department / College</th>
+                  <th className="px-6 py-3.5">Attendance</th>
+                  <th className="px-6 py-3.5">Photo</th>
+                  <th className="px-6 py-3.5 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#E4E9F0]">
@@ -276,13 +360,13 @@ export default function RegisteredAttendeesPage() {
                   <tr>
                     <td colSpan={7} className="px-6 py-8 text-center text-[#667085]">
                       <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-[#2864B4]" />
-                      Loading registered attendee directory...
+                      Loading attendee records...
                     </td>
                   </tr>
                 ) : attendees.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="px-6 py-8 text-center text-[#667085]">
-                      No registered attendees found matching your criteria.
+                      No registered attendees match the current filters or search term.
                     </td>
                   </tr>
                 ) : (
@@ -296,25 +380,35 @@ export default function RegisteredAttendeesPage() {
                       {/* Category */}
                       <td className="px-6 py-3.5">
                         <Badge variant="blue">
-                          {attendee.category === 'guide' ? 'Research Guide' : 'PhD Scholar'}
+                          {attendee.category === 'guide' ? 'Guide' : 'PhD Scholar'}
                         </Badge>
                       </td>
 
-                      {/* Email / Identifier */}
-                      <td className="px-6 py-3.5 font-mono text-[#142D4E]">
-                        {attendee.email ? (
-                          <span className="flex items-center gap-1.5 font-medium">
-                            <Mail className="w-3.5 h-3.5 text-[#2864B4]" />
-                            {attendee.email}
-                          </span>
-                        ) : attendee.phd_id ? (
-                          <span className="flex items-center gap-1.5 font-semibold text-[#182230]">
-                            <Award className="w-3.5 h-3.5 text-[#D97706]" />
-                            ID: {attendee.phd_id}
-                          </span>
-                        ) : (
-                          <span className="text-[#94A3B8] italic">Not provided</span>
-                        )}
+                      {/* Email / PhD ID */}
+                      <td className="px-6 py-3.5 text-[#182230]">
+                        <div className="space-y-0.5">
+                          {attendee.category === 'guide' ? (
+                            <div className="flex items-center gap-1.5 font-medium text-[#142D4E]">
+                              <Mail className="w-3.5 h-3.5 text-[#2864B4] shrink-0" />
+                              <span>{attendee.email || '—'}</span>
+                            </div>
+                          ) : (
+                            <div className="space-y-0.5">
+                              {attendee.phd_id && (
+                                <div className="flex items-center gap-1.5 font-mono font-semibold text-[#142D4E]">
+                                  <Award className="w-3.5 h-3.5 text-[#E65100] shrink-0" />
+                                  <span>ID: {attendee.phd_id}</span>
+                                </div>
+                              )}
+                              {attendee.email && (
+                                <div className="flex items-center gap-1 text-[11px] text-[#667085]">
+                                  <Mail className="w-3 h-3 text-[#667085] shrink-0" />
+                                  <span>{attendee.email}</span>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </td>
 
                       {/* Department / Metadata */}
@@ -357,15 +451,28 @@ export default function RegisteredAttendeesPage() {
                         )}
                       </td>
 
-                      {/* Action */}
+                      {/* Actions */}
                       <td className="px-6 py-3.5 text-right">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setSelectedAttendee(attendee)}
-                        >
-                          <Eye className="w-3.5 h-3.5 mr-1" /> View Details
-                        </Button>
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setSelectedAttendee(attendee)}
+                          >
+                            <Eye className="w-3.5 h-3.5 mr-1" /> View Details
+                          </Button>
+                          {attendee.attended && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setRevokeConfirmAttendee(attendee)}
+                              className="border-[#C0393A]/30 text-[#C0393A] hover:bg-[#C0393A]/10 hover:border-[#C0393A]"
+                              title="Remove attendance and photo (Attendee remains safely in registry)"
+                            >
+                              <Trash2 className="w-3.5 h-3.5 mr-1 text-[#C0393A]" /> Revoke
+                            </Button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -434,7 +541,9 @@ export default function RegisteredAttendeesPage() {
                 <span className="text-[#667085]">Attendance Status:</span>
                 <span className="font-semibold">
                   {selectedAttendee.attended ? (
-                    <span className="text-[#16835D]">Attended ({new Date(selectedAttendee.attended_at!).toLocaleString()})</span>
+                    <span className="text-[#16835D]">
+                      Attended ({new Date(selectedAttendee.attended_at!).toLocaleString()})
+                    </span>
                   ) : (
                     <span className="text-[#D97706]">Awaiting Check-in</span>
                   )}
@@ -457,9 +566,100 @@ export default function RegisteredAttendeesPage() {
               )}
             </div>
 
-            <div className="flex justify-end">
+            <div className="flex items-center justify-between pt-2">
+              {selectedAttendee.attended ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const att = selectedAttendee;
+                    setSelectedAttendee(null);
+                    setRevokeConfirmAttendee(att);
+                  }}
+                  className="border-[#C0393A]/30 text-[#C0393A] hover:bg-[#C0393A]/10 hover:border-[#C0393A]"
+                >
+                  <Trash2 className="w-3.5 h-3.5 mr-1.5 text-[#C0393A]" /> Revoke Attendance (Reset to Pending)
+                </Button>
+              ) : (
+                <div />
+              )}
+
               <Button variant="outline" size="sm" onClick={() => setSelectedAttendee(null)}>
                 Close
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Confirmation Modal for Revoking Attendance */}
+      {revokeConfirmAttendee && (
+        <Modal
+          isOpen={!!revokeConfirmAttendee}
+          onClose={() => !isRevoking && setRevokeConfirmAttendee(null)}
+          title="Confirm Revoke Attendance"
+          maxWidth="md"
+        >
+          <div className="space-y-4">
+            <div className="p-3 bg-[#C0393A]/10 border border-[#C0393A]/20 rounded-xl flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-[#C0393A] shrink-0 mt-0.5" />
+              <div className="text-xs text-[#182230] space-y-1">
+                <p className="font-bold text-sm text-[#C0393A]">
+                  Remove attendance for &ldquo;{revokeConfirmAttendee.name}&rdquo;?
+                </p>
+                <p className="text-[#667085]">
+                  This will delete the attendance record, check-in timestamp, and captured photograph.
+                </p>
+                <p className="text-[#16835D] font-semibold">
+                  ✓ Safe Action: The registered person will NOT be deleted. Their profile and enrollment details remain safely in the registry and their status will revert to &ldquo;Pending&rdquo;.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3 bg-[#F7F9FC] border border-[#E4E9F0] rounded-lg text-xs space-y-1.5">
+              <div className="flex justify-between">
+                <span className="text-[#667085]">Attendee Name:</span>
+                <span className="font-bold text-[#142D4E]">{revokeConfirmAttendee.name}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#667085]">Category:</span>
+                <span className="capitalize font-semibold text-[#182230]">
+                  {revokeConfirmAttendee.category === 'guide' ? 'Research Guide' : 'PhD Scholar'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#667085]">Identifier:</span>
+                <span className="font-mono text-[#182230]">
+                  {revokeConfirmAttendee.email || revokeConfirmAttendee.phd_id || '—'}
+                </span>
+              </div>
+              {revokeConfirmAttendee.attended_at && (
+                <div className="flex justify-between">
+                  <span className="text-[#667085]">Recorded Check-In:</span>
+                  <span className="font-mono text-[#182230]">
+                    {new Date(revokeConfirmAttendee.attended_at).toLocaleString()}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={isRevoking}
+                onClick={() => setRevokeConfirmAttendee(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                isLoading={isRevoking}
+                onClick={handleRevokeAttendance}
+                className="bg-[#C0393A] hover:bg-[#A82D2E] text-white font-semibold"
+              >
+                <Trash2 className="w-3.5 h-3.5 mr-1.5" /> Confirm Remove Attendance
               </Button>
             </div>
           </div>
