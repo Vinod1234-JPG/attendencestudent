@@ -1,5 +1,12 @@
-// MRF Event Attendance Tracker - Service Worker v4
-const CACHE_NAME = 'mrf-attendance-shell-v4';
+// MIT Mysore Student Attendance Tracker - Service Worker v5
+// v5: stop serving stale app code. Only content-hashed files are cached now, so a new
+// deployment (or a code change in dev) is always picked up. Old v4 caches are purged on activate.
+const CACHE_NAME = 'mrf-attendance-shell-v5';
+
+// Production Next.js files carry a 16-hex-character content hash in their name (e.g. page-be3c00d33fefc190.js,
+// a3610d61eea90c65.css). Those never change, so they are safe to cache. Anything else, such as dev files like
+// page.js, must always come from the network.
+const HASHED_ASSET = /\/_next\/static\/.*[-/][0-9a-f]{16}\.(js|css)$/;
 const PRECACHE_URLS = [
   '/',
   '/kiosk',
@@ -80,9 +87,10 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Only cache immutable static assets (_next/static/, favicon, manifest)
+  // Only cache immutable assets: content-hashed _next/static files, favicon, manifest.
+  // Non-hashed _next/static files fall through to the network on purpose (see HASHED_ASSET).
   if (
-    url.pathname.startsWith('/_next/static/') ||
+    HASHED_ASSET.test(url.pathname) ||
     url.pathname === '/favicon.ico' ||
     url.pathname === '/manifest.json'
   ) {

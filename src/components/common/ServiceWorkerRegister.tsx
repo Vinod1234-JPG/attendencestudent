@@ -9,7 +9,7 @@ export default function ServiceWorkerRegister() {
       if ('caches' in window) {
         caches.keys().then((names) => {
           for (const name of names) {
-            if (name !== 'mrf-attendance-shell-v4') {
+            if (name !== 'mrf-attendance-shell-v5') {
               caches.delete(name);
             }
           }
