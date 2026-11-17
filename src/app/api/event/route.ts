@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { recordAuditLog } from '@/lib/utils/audit';
+import { requireAdmin } from '@/lib/auth/requireAdmin';
 
 export async function GET() {
+  const auth = await requireAdmin();
+  if (auth.response) return auth.response;
+
   try {
     const isPlaceholder =
       !process.env.NEXT_PUBLIC_SUPABASE_URL ||
@@ -13,7 +17,7 @@ export async function GET() {
         success: true,
         event: {
           id: 'dev-event-1',
-          name: 'MRF Research Retreat',
+          name: 'MIT Mysore Student Attendance',
           event_date: '2026-10-24',
           timezone: 'Asia/Kolkata',
           status: 'active',
@@ -24,7 +28,7 @@ export async function GET() {
         session: {
           id: 'dev-session-1',
           event_id: 'dev-event-1',
-          name: 'General Retreat Check-in Session',
+          name: 'General Check-in Session',
           status: 'open',
           opens_at: new Date().toISOString(),
           closes_at: null,
@@ -67,6 +71,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const auth = await requireAdmin();
+  if (auth.response) return auth.response;
+
   try {
     const body = await request.json();
     const {

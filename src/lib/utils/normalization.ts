@@ -56,7 +56,7 @@ export function isValidPhdId(id: string | null | undefined): boolean {
  * Guide: "j****@domain.com"
  * PhD ID: "MRF-***-042"
  */
-export function maskIdentifier(identifier: string, category: 'guide' | 'phd_scholar'): string {
+export function maskIdentifier(identifier: string, category: 'guide' | 'phd_scholar' | 'student'): string {
   if (!identifier) return '';
   if (category === 'guide') {
     const parts = identifier.split('@');
@@ -118,4 +118,57 @@ export function isNameMatching(
     return inputWords.length === 1 ? regWords.includes(w) : false;
   });
   return hasCommonWord;
+}
+
+// ---------------------------------------------------------------------------
+// Students (self-registered at the kiosk with name + college)
+// ---------------------------------------------------------------------------
+
+export type AttendeeCategory = 'guide' | 'phd_scholar' | 'student';
+
+export const STUDENT_NAME_MAX = 120;
+export const COLLEGE_NAME_MAX = 160;
+
+/** Tidies free text for display/storage: trims and collapses inner whitespace. */
+export function cleanDisplayText(value: string | null | undefined): string {
+  if (!value) return '';
+  return String(value).replace(/\s+/g, ' ').trim();
+}
+
+/** Lowercase, punctuation-free, single-spaced form used for matching. */
+export function normalizeForMatch(value: string | null | undefined): string {
+  if (!value) return '';
+  return String(value)
+    .toLowerCase()
+    .replace(/[!-\/:-@\[-`{-~]/g, ' ') // ASCII punctuation; letters in any script are kept
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Identity key for a student: the same name at the same college is the same student.
+ * "Rahul K." at "MIT Mysore" and "rahul k" at "mit  mysore" share a key.
+ */
+export function buildStudentKey(name: string, college: string): string {
+  return `${normalizeForMatch(name)}|${normalizeForMatch(college)}`;
+}
+
+/** Returns an error message, or null when the student's name and college are acceptable. */
+export function validateStudentDetails(name: string, college: string): string | null {
+  const n = cleanDisplayText(name);
+  const c = cleanDisplayText(college);
+  if (!n) return 'Please enter your student name.';
+  if (!c) return 'Please enter your college name.';
+  if (!normalizeForMatch(n)) return 'Please enter a valid student name.';
+  if (!normalizeForMatch(c)) return 'Please enter a valid college name.';
+  if (n.length > STUDENT_NAME_MAX) return `Student name must be at most ${STUDENT_NAME_MAX} characters.`;
+  if (c.length > COLLEGE_NAME_MAX) return `College name must be at most ${COLLEGE_NAME_MAX} characters.`;
+  return null;
+}
+
+/** Human label for any stored category (older guide/scholar rows still display correctly). */
+export function categoryLabel(category: string | null | undefined): string {
+  if (category === 'guide') return 'Guide';
+  if (category === 'phd_scholar') return 'PhD Scholar';
+  return 'Student';
 }

@@ -5,11 +5,9 @@ import Link from 'next/link';
 import {
   Users,
   GraduationCap,
-  BookOpen,
   CheckCircle2,
   Clock,
   Percent,
-  Upload,
   ArrowRight,
   RefreshCw,
   Camera,
@@ -18,7 +16,6 @@ import {
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { maskIdentifier } from '@/lib/utils/normalization';
 
 interface DashboardStats {
   totalGuidesRegistered: number;
@@ -60,7 +57,7 @@ export default function AdminDashboardPage() {
 
       const totalGuides = attData.counts?.guides || 0;
       const totalScholars = attData.counts?.scholars || 0;
-      const totalReg = attData.counts?.total || totalGuides + totalScholars;
+      const totalReg = attData.counts?.total ?? attData.counts?.students ?? totalGuides + totalScholars;
       const totalAttended = attData.counts?.attended || data.pagination?.total || 0;
       const guidesAttended = attData.counts?.attendedGuides ?? 0;
       const scholarsAttended = attData.counts?.attendedScholars ?? 0;
@@ -107,7 +104,7 @@ export default function AdminDashboardPage() {
         <div>
           <h1 className="text-2xl font-extrabold text-[#142D4E]">Attendance Operations Dashboard</h1>
           <p className="text-xs text-[#667085] mt-1">
-            Real-time monitoring for Maharaja Research Foundation Event Attendance Session.
+            Real-time monitoring of MIT Mysore student attendance.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -126,15 +123,15 @@ export default function AdminDashboardPage() {
       {!isLoading && stats.totalRegistered === 0 && (
         <div className="p-8 bg-white border border-[#E4E9F0] rounded-xl text-center">
           <div className="w-12 h-12 bg-[#EAF2FC] text-[#2864B4] rounded-full flex items-center justify-center mx-auto mb-3">
-            <Upload className="w-6 h-6" />
+            <GraduationCap className="w-6 h-6" />
           </div>
-          <h3 className="text-lg font-bold text-[#142D4E]">No MRF Attendee Records Found</h3>
+          <h3 className="text-lg font-bold text-[#142D4E]">No Students Registered Yet</h3>
           <p className="text-xs text-[#667085] max-w-md mx-auto mt-1 mb-4">
-            Before attendees can check in at the kiosk, you must import the registered Guides and PhD Scholars list.
+            Students register themselves the first time they check in at the kiosk with their name and college.
           </p>
-          <Link href="/admin/import">
+          <Link href="/kiosk" target="_blank">
             <Button variant="primary" size="md">
-              <Upload className="w-4 h-4 mr-2" /> Upload MRF Data
+              Open Live Kiosk <ArrowRight className="w-4 h-4 ml-2" />
             </Button>
           </Link>
         </div>
@@ -151,7 +148,7 @@ export default function AdminDashboardPage() {
               </div>
               <p className="text-2xl font-bold text-[#142D4E] mt-2">{stats.totalRegistered}</p>
               <p className="text-[11px] text-[#2864B4] font-medium mt-1">
-                {stats.totalGuidesRegistered} Guides • {stats.totalScholarsRegistered} Scholars (View Registry →)
+                Students (View Registry →)
               </p>
             </CardContent>
           </Card>
@@ -173,7 +170,7 @@ export default function AdminDashboardPage() {
         <Card>
           <CardContent className="p-5">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-[#667085]">Pending Attendees</span>
+              <span className="text-xs font-semibold text-[#667085]">Not Yet Checked In</span>
               <Clock className="w-4 h-4 text-[#B7791F]" />
             </div>
             <p className="text-2xl font-bold text-[#B7791F] mt-2">{stats.pendingAttendees}</p>
@@ -200,69 +197,6 @@ export default function AdminDashboardPage() {
         </Card>
       </div>
 
-      {/* Category Attendance Breakdown */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <BookOpen className="w-4 h-4 text-[#2864B4]" /> Guides Attendance
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex justify-between items-center text-sm">
-              <span className="text-[#667085]">Registered Guides:</span>
-              <span className="font-bold text-[#182230]">{stats.totalGuidesRegistered}</span>
-            </div>
-            <div className="flex justify-between items-center text-sm">
-              <span className="text-[#667085]">Attended at Kiosk:</span>
-              <span className="font-bold text-[#16835D]">{stats.guidesAttended}</span>
-            </div>
-            <div className="w-full bg-[#EEF1F5] h-2 rounded-full overflow-hidden">
-              <div
-                className="bg-[#2864B4] h-full rounded-full"
-                style={{
-                  width: `${
-                    stats.totalGuidesRegistered > 0
-                      ? Math.min(100, (stats.guidesAttended / stats.totalGuidesRegistered) * 100)
-                      : 0
-                  }%`,
-                }}
-              />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <GraduationCap className="w-4 h-4 text-[#2864B4]" /> PhD Scholars Attendance
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex justify-between items-center text-sm">
-              <span className="text-[#667085]">Registered Scholars:</span>
-              <span className="font-bold text-[#182230]">{stats.totalScholarsRegistered}</span>
-            </div>
-            <div className="flex justify-between items-center text-sm">
-              <span className="text-[#667085]">Attended at Kiosk:</span>
-              <span className="font-bold text-[#16835D]">{stats.scholarsAttended}</span>
-            </div>
-            <div className="w-full bg-[#EEF1F5] h-2 rounded-full overflow-hidden">
-              <div
-                className="bg-[#2864B4] h-full rounded-full"
-                style={{
-                  width: `${
-                    stats.totalScholarsRegistered > 0
-                      ? Math.min(100, (stats.scholarsAttended / stats.totalScholarsRegistered) * 100)
-                      : 0
-                  }%`,
-                }}
-              />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
       {/* Recent Attendance Activity */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
@@ -281,9 +215,8 @@ export default function AdminDashboardPage() {
               <table className="w-full text-left text-xs">
                 <thead className="bg-[#F7F9FC] text-[#667085] border-b border-[#E4E9F0]">
                   <tr>
-                    <th className="px-6 py-3 font-semibold">Attendee Name</th>
-                    <th className="px-6 py-3 font-semibold">Category</th>
-                    <th className="px-6 py-3 font-semibold">Identifier</th>
+                    <th className="px-6 py-3 font-semibold">Student Name</th>
+                    <th className="px-6 py-3 font-semibold">College</th>
                     <th className="px-6 py-3 font-semibold">Timestamp</th>
                     <th className="px-6 py-3 font-semibold">Photo</th>
                     <th className="px-6 py-3 font-semibold">Status</th>
@@ -295,13 +228,8 @@ export default function AdminDashboardPage() {
                       <td className="px-6 py-3.5 font-bold text-[#182230]">
                         {rec.attendee?.name}
                       </td>
-                      <td className="px-6 py-3.5">
-                        <Badge variant="blue">
-                          {rec.attendee?.category === 'guide' ? 'Guide' : 'PhD Scholar'}
-                        </Badge>
-                      </td>
-                      <td className="px-6 py-3.5 font-mono text-[#667085]">
-                        {maskIdentifier(rec.attendee?.identifier, rec.attendee?.category)}
+                      <td className="px-6 py-3.5 text-[#667085]">
+                        {rec.attendee?.college || rec.attendee?.identifier || '—'}
                       </td>
                       <td className="px-6 py-3.5 text-[#667085]">
                         {new Date(rec.captured_at_device).toLocaleTimeString([], {

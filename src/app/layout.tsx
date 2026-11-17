@@ -3,8 +3,8 @@ import './globals.css';
 import ServiceWorkerRegister from '@/components/common/ServiceWorkerRegister';
 
 export const metadata: Metadata = {
-  title: 'MRF Event Attendance Tracker | Maharaja Research Foundation',
-  description: 'Self-Service Kiosk and Management System for MRF Event Attendance',
+  title: 'MIT Mysore Student Attendance Tracker',
+  description: 'Self-service student attendance kiosk and management system for MIT Mysore',
   manifest: '/manifest.json',
   icons: {
     icon: '/favicon.ico',

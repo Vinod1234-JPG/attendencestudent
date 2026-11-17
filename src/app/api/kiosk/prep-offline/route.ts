@@ -1,54 +1,25 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { isPlaceholderMode } from '@/lib/auth/adminSession';
 
 export const dynamic = 'force-dynamic';
 
+/**
+ * Prepares a kiosk to work without internet. Students self-register, so a kiosk
+ * only needs the active event and open session; no student list is sent
+ * (keeps everyone's details off public devices).
+ */
 export async function GET() {
   try {
-    const isPlaceholder =
-      !process.env.NEXT_PUBLIC_SUPABASE_URL ||
-      process.env.NEXT_PUBLIC_SUPABASE_URL.includes('placeholder');
-
-    if (isPlaceholder) {
-      const samplePeople = [
-        {
-          id: 'dev-guide-1',
-          category: 'guide' as const,
-          name: 'Prof. R. Natarajan',
-          normalized_email: 'r.natarajan@mrf.org',
-          phd_id: null,
-        },
-        {
-          id: 'dev-guide-2',
-          category: 'guide' as const,
-          name: 'Dr. Sunita Kulkarni',
-          normalized_email: 's.kulkarni@mrf.org',
-          phd_id: null,
-        },
-        {
-          id: 'dev-scholar-1',
-          category: 'phd_scholar' as const,
-          name: 'Aditya Verma',
-          normalized_email: null,
-          phd_id: 'MRF-PHD-2026-001',
-        },
-        {
-          id: 'dev-scholar-2',
-          category: 'phd_scholar' as const,
-          name: 'Deepika Sharma',
-          normalized_email: null,
-          phd_id: 'MRF-PHD-2026-002',
-        },
-      ];
-
+    if (isPlaceholderMode()) {
       return NextResponse.json({
         success: true,
-        dataset_version: 1,
+        dataset_version: 2,
         generated_at: new Date().toISOString(),
         event: {
           id: 'dev-event-1',
-          name: 'MRF Research Retreat',
-          event_date: '2026-10-24',
+          name: 'MIT Mysore Student Attendance',
+          event_date: new Date().toISOString().slice(0, 10),
           timezone: 'Asia/Kolkata',
           status: 'active',
           kiosk_enabled: true,
@@ -57,23 +28,17 @@ export async function GET() {
         session: {
           id: 'dev-session-1',
           event_id: 'dev-event-1',
-          name: 'General Retreat Check-in Session',
+          name: 'General Check-in Session',
           status: 'open',
           opens_at: new Date().toISOString(),
           closes_at: null,
         },
-        people: samplePeople,
-        counts: {
-          guides: 2,
-          scholars: 2,
-          total: 4,
-        },
+        people: [],
       });
     }
 
     const admin = createAdminClient();
 
-    // 1. Fetch active event
     const { data: event, error: eventErr } = await admin
       .from('events')
       .select('id, name, event_date, timezone, status, kiosk_enabled, offline_allowed')
@@ -87,7 +52,13 @@ export async function GET() {
       );
     }
 
-    // 2. Fetch open session
+    if (!event.offline_allowed) {
+      return NextResponse.json(
+        { error: 'Offline kiosk mode is disabled for this event.' },
+        { status: 403 }
+      );
+    }
+
     const { data: session, error: sessErr } = await admin
       .from('event_sessions')
       .select('id, event_id, name, status, opens_at, closes_at')
@@ -102,42 +73,18 @@ export async function GET() {
       );
     }
 
-    // 3. Fetch all registered people (Guides and PhD Scholars)
-    const { data: peopleRaw, error: peopleErr } = await admin
-      .from('people')
-      .select('*');
-
-    if (peopleErr) {
-      return NextResponse.json(
-        { error: 'Failed to fetch registered attendees for offline preparation.' },
-        { status: 500 }
-      );
-    }
-
-    const people = (peopleRaw || []).sort((a: any, b: any) =>
-      (a.name || '').localeCompare(b.name || '')
-    );
-
-    const guideCount = people.filter((p) => p.category === 'guide').length;
-    const scholarCount = people.filter((p) => p.category === 'phd_scholar').length;
-
     return NextResponse.json({
       success: true,
-      dataset_version: 1,
+      dataset_version: 2,
       generated_at: new Date().toISOString(),
       event,
       session,
-      people,
-      counts: {
-        guides: guideCount,
-        scholars: scholarCount,
-        total: people.length,
-      },
+      people: [],
     });
-  } catch (err: any) {
+  } catch (err) {
     console.error('Offline prep exception:', err);
     return NextResponse.json(
-      { error: err.message || 'Server error preparing offline dataset.' },
+      { error: 'Server error preparing offline dataset.' },
       { status: 500 }
     );
   }

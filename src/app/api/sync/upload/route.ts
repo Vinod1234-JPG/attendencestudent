@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { recordAuditLog } from '@/lib/utils/audit';
+import { cleanDisplayText, validateStudentDetails } from '@/lib/utils/normalization';
+import { findOrCreateStudent } from '@/lib/students/findOrCreateStudent';
 
 export async function POST(request: Request) {
   try {
@@ -8,13 +10,15 @@ export async function POST(request: Request) {
 
     const operationId = formData.get('operation_id') as string;
     const sessionId = formData.get('session_id') as string;
-    const personId = formData.get('person_id') as string;
-    const category = formData.get('category') as string;
+    let personId = (formData.get('person_id') as string) || '';
+    const category = (formData.get('category') as string) || 'student';
     const identifier = formData.get('identifier') as string;
+    const studentName = cleanDisplayText(formData.get('attendee_name') as string);
+    const college = cleanDisplayText(formData.get('college') as string);
     const capturedAtDevice = formData.get('captured_at_device') as string;
     const photoFile = formData.get('photo') as File | null;
 
-    if (!operationId || !sessionId || !personId || !photoFile) {
+    if (!operationId || !sessionId || !photoFile || (!personId && category !== 'student')) {
       return NextResponse.json(
         { error: 'Missing required sync operation payload or photo.' },
         { status: 400 }
@@ -22,6 +26,15 @@ export async function POST(request: Request) {
     }
 
     const admin = createAdminClient();
+
+    // Students captured offline have no record yet: register them now.
+    if (!personId) {
+      const invalid = validateStudentDetails(studentName, college);
+      if (invalid) {
+        return NextResponse.json({ error: invalid }, { status: 400 });
+      }
+      personId = (await findOrCreateStudent(admin, studentName, college)).id;
+    }
     const nowIso = new Date().toISOString();
 
     // 1. Idempotency Check by operation_id

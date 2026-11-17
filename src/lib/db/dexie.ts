@@ -23,7 +23,7 @@ export interface CachedSession {
 
 export interface CachedPerson {
   id: string;
-  category: 'guide' | 'phd_scholar';
+  category: 'guide' | 'phd_scholar' | 'student';
   name: string;
   normalized_email?: string | null;
   phd_id?: string | null;
@@ -37,10 +37,11 @@ export type SyncStatus = 'pending' | 'uploading' | 'synced' | 'failed' | 'confli
 export interface OfflineAttendanceRecord {
   operation_id: string; // Client-generated UUID
   session_id: string;
-  person_id: string;
-  category: 'guide' | 'phd_scholar';
-  identifier: string; // The email or PhD ID entered
+  person_id: string; // Empty for a student whose record is created on sync
+  category: 'guide' | 'phd_scholar' | 'student';
+  identifier: string; // Students: their college name
   person_name: string;
+  college?: string;
   captured_at_device: string; // ISO 8601 string
   photo_blob: Blob;
   photo_mime_type: string;

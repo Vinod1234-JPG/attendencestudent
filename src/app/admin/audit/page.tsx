@@ -90,7 +90,7 @@ export default function AuditLogPage() {
               <option value="ATTENDANCE_RECORDED">Attendance Recorded</option>
               <option value="SYNC_ATTENDANCE_SUCCESS">Sync Attendance Success</option>
               <option value="SYNC_CONFLICT_DETECTED">Sync Conflict Detected</option>
-              <option value="MRF_DATA_IMPORTED">MRF Data Imported</option>
+              <option value="STUDENT_SELF_REGISTERED">Student Self-Registered</option>
               <option value="ATTENDANCE_EXPORTED">Attendance Exported</option>
               <option value="EVENT_SETTINGS_UPDATED">Settings Updated</option>
             </select>

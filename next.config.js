@@ -4,8 +4,12 @@ const path = require('path');
 const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
-  webpack: (config) => {
+  webpack: (config, { dev }) => {
     config.resolve.alias['@'] = path.resolve(__dirname, 'src');
+    if (dev) {
+      // Avoid filesystem caching collisions with Windows OneDrive sync
+      config.cache = false;
+    }
     return config;
   },
   images: {

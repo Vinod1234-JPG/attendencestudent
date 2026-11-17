@@ -285,7 +285,7 @@ export default function SyncStatusPage() {
                 <thead className="bg-[#F7F9FC] text-[#667085] border-b border-[#E4E9F0]">
                   <tr>
                     <th className="px-6 py-3 font-semibold">Attendee Name</th>
-                    <th className="px-6 py-3 font-semibold">Category</th>
+                    <th className="px-6 py-3 font-semibold">College</th>
                     <th className="px-6 py-3 font-semibold">Capture Timestamp</th>
                     <th className="px-6 py-3 font-semibold">Attempts</th>
                     <th className="px-6 py-3 font-semibold">Sync Status</th>
@@ -299,7 +299,7 @@ export default function SyncStatusPage() {
                       <td className="px-6 py-3 font-bold text-[#182230]">
                         {item.person_name}
                       </td>
-                      <td className="px-6 py-3 capitalize">{item.category}</td>
+                      <td className="px-6 py-3">{item.college || item.identifier}</td>
                       <td className="px-6 py-3 text-[#667085]">
                         {new Date(item.captured_at_device).toLocaleTimeString()}
                       </td>

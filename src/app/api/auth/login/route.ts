@@ -1,91 +1,86 @@
 import { NextResponse } from 'next/server';
+import { timingSafeEqual, createHash } from 'crypto';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { recordAuditLog } from '@/lib/utils/audit';
+import {
+  ADMIN_ROLES,
+  DEV_SESSION_COOKIE,
+  DEV_SESSION_MAX_AGE_SECONDS,
+  isDevLoginConfigured,
+  isPlaceholderMode,
+  signDevSession,
+} from '@/lib/auth/adminSession';
+
+export const dynamic = 'force-dynamic';
+
+/** Constant-time string comparison (hashing first equalises lengths). */
+function safeEqual(a: string, b: string): boolean {
+  const ha = createHash('sha256').update(a).digest();
+  const hb = createHash('sha256').update(b).digest();
+  return timingSafeEqual(ha, hb);
+}
 
 export async function POST(request: Request) {
   try {
-    const { email, password } = await request.json();
+    const { email, password } = await request.json().catch(() => ({}));
 
-    if (!email || !password) {
-      return NextResponse.json(
-        { error: 'Email and password are required.' },
-        { status: 400 }
-      );
+    if (typeof email !== 'string' || typeof password !== 'string' || !email || !password) {
+      return NextResponse.json({ error: 'Email and password are required.' }, { status: 400 });
     }
 
     const trimmedEmail = email.trim().toLowerCase();
-    const masterPassword = process.env.ADMIN_PASSWORD || 'MRF@ResearchRetreat';
-    const isMasterCredential =
-      (trimmedEmail === 'admin@mrf.org' || trimmedEmail === 'convener@mrf.org') &&
-      (password === masterPassword || password === 'MRF@ResearchRetreat' || password === 'MRF@Conclave2026');
 
-    const isPlaceholder =
-      !process.env.NEXT_PUBLIC_SUPABASE_URL ||
-      process.env.NEXT_PUBLIC_SUPABASE_URL.includes('placeholder');
-
-    // 1. Authorized Master Administrator credentials always succeed
-    if (isMasterCredential) {
-      // In live Supabase mode, ensure the admin account exists in Supabase Auth & profiles
-      if (!isPlaceholder) {
-        try {
-          const adminClient = createAdminClient();
-          const { data: newUser } = await adminClient.auth.admin.createUser({
-            email: trimmedEmail,
-            password: password,
-            email_confirm: true,
-            user_metadata: { role: 'admin' },
-          });
-
-          if (newUser?.user) {
-            await adminClient.from('profiles').upsert({
-              id: newUser.user.id,
-              role: 'admin',
-              full_name: trimmedEmail === 'admin@mrf.org' ? 'MRF Administrator' : 'MRF Convener',
-            });
-          }
-        } catch {
-          // If already created or network glitch, proceed with authorized session
-        }
+    // ------------------------------------------------------------------
+    // Local development without Supabase: single admin from environment
+    // ------------------------------------------------------------------
+    if (isPlaceholderMode()) {
+      if (!isDevLoginConfigured()) {
+        return NextResponse.json(
+          {
+            error:
+              'Development login is not configured. Set ADMIN_EMAIL, ADMIN_PASSWORD and ADMIN_SESSION_SECRET (32+ chars) in .env.local.',
+          },
+          { status: 503 }
+        );
       }
 
-      await recordAuditLog({
-        actorId: null,
-        action: 'ADMIN_LOGIN',
-        entityType: 'AUTH',
-        entityId: trimmedEmail,
-        outcome: 'success',
-        metadata: { mode: isPlaceholder ? 'development_mode' : 'master_admin', email: trimmedEmail },
-      });
+      const expectedEmail = process.env.ADMIN_EMAIL!.trim().toLowerCase();
+      const emailOk = safeEqual(trimmedEmail, expectedEmail);
+      const passwordOk = safeEqual(password, process.env.ADMIN_PASSWORD!);
+
+      if (!emailOk || !passwordOk) {
+        return NextResponse.json(
+          {
+            error:
+              'Invalid email or password. This server is running in local test mode (not connected to Supabase), so only the test login from .env.development.local works here.',
+          },
+          { status: 401 }
+        );
+      }
+
+      const token = await signDevSession(expectedEmail);
+      if (!token) {
+        return NextResponse.json({ error: 'Session signing is not configured.' }, { status: 503 });
+      }
 
       const response = NextResponse.json({
         success: true,
-        user: { email: trimmedEmail, role: 'admin' },
-        message: 'MRF Administrator login successful',
+        user: { email: expectedEmail, role: 'admin' },
       });
-
-      response.cookies.set('mrf_admin_session', 'active', {
+      response.cookies.set(DEV_SESSION_COOKIE, token, {
         path: '/',
         httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
-        maxAge: 60 * 60 * 24, // 24 hours
+        maxAge: DEV_SESSION_MAX_AGE_SECONDS,
       });
-
       return response;
     }
 
-    // 2. Reject invalid credentials in local development mode
-    if (isPlaceholder) {
-      return NextResponse.json(
-        {
-          error:
-            'Invalid credentials. (For MRF Admin access, use admin@mrf.org / MRF@ResearchRetreat)',
-        },
-        { status: 401 }
-      );
-    }
-
-    // 3. For custom admin accounts, authenticate with live Supabase Auth
+    // ------------------------------------------------------------------
+    // Live mode: Supabase Auth + admin profile role
+    // ------------------------------------------------------------------
     const supabase = createServerSupabaseClient();
     const { data, error } = await supabase.auth.signInWithPassword({
       email: trimmedEmail,
@@ -102,21 +97,26 @@ export async function POST(request: Request) {
         metadata: { error: error?.message },
       });
 
-      return NextResponse.json(
-        { error: error?.message || 'Invalid email or password.' },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: 'Invalid email or password.' }, { status: 401 });
     }
 
-    // Verify authorized administrator profile
-    const { data: profile } = await supabase
+    const admin = createAdminClient();
+    const { data: profile } = await admin
       .from('profiles')
       .select('role')
       .eq('id', data.user.id)
-      .single();
+      .maybeSingle();
 
-    if (!profile || !['admin', 'super_admin'].includes(profile.role)) {
+    if (!profile || !(ADMIN_ROLES as readonly string[]).includes(profile.role)) {
       await supabase.auth.signOut();
+      await recordAuditLog({
+        actorId: data.user.id,
+        action: 'ADMIN_LOGIN_DENIED',
+        entityType: 'AUTH',
+        entityId: data.user.id,
+        outcome: 'failure',
+        metadata: { email: data.user.email, reason: 'no_admin_profile' },
+      });
       return NextResponse.json(
         { error: 'Access denied: User is not authorized as an MRF administrator.' },
         { status: 403 }
@@ -132,28 +132,16 @@ export async function POST(request: Request) {
       metadata: { email: data.user.email, role: profile.role },
     });
 
+    // Supabase session cookies were set by the server client above.
     const response = NextResponse.json({
       success: true,
-      user: {
-        id: data.user.id,
-        email: data.user.email,
-        role: profile.role,
-      },
+      user: { id: data.user.id, email: data.user.email, role: profile.role },
     });
-
-    response.cookies.set('mrf_admin_session', 'active', {
-      path: '/',
-      httpOnly: true,
-      sameSite: 'lax',
-      maxAge: 60 * 60 * 24,
-    });
-
+    // Remove the legacy unsigned flag cookie if a browser still has it.
+    response.cookies.delete(DEV_SESSION_COOKIE);
     return response;
-  } catch (err: any) {
+  } catch (err) {
     console.error('Login error:', err);
-    return NextResponse.json(
-      { error: err.message || 'An unexpected server error occurred.' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'An unexpected server error occurred.' }, { status: 500 });
   }
 }

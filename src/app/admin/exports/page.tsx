@@ -25,7 +25,7 @@ export default function ExportsPage() {
   // Trigger server-generated downloads
   const handleServerExport = async (
     format: 'csv' | 'xlsx' | 'zip' | 'pdf',
-    category: 'all' | 'guide' | 'phd_scholar',
+    category: 'all' | 'guide' | 'phd_scholar' | 'student',
     source: 'attendance' | 'registered' = 'attendance'
   ) => {
     const key = `${format}_${category}_${source}`;
@@ -41,7 +41,7 @@ export default function ExportsPage() {
 
       const blob = await res.blob();
       const contentDisposition = res.headers.get('Content-Disposition');
-      let filename = `MRF_${source === 'registered' ? 'Registered_Directory' : 'Attendance'}_${category}.${format}`;
+      let filename = `MITM_Students_${source === 'registered' ? 'Registered_Directory' : 'Attendance'}.${format}`;
       if (contentDisposition && contentDisposition.includes('filename=')) {
         filename = contentDisposition.split('filename=')[1].replace(/"/g, '');
       }
@@ -104,7 +104,7 @@ export default function ExportsPage() {
 
       zip.file(
         'RECOVERY_NOTICE.txt',
-        `MAHARAJA RESEARCH FOUNDATION - EMERGENCY OFFLINE RECOVERY EXPORT
+        `MIT MYSORE STUDENT ATTENDANCE TRACKER - EMERGENCY OFFLINE RECOVERY EXPORT
 Generated directly from kiosk IndexedDB device storage.
 Total records extracted: ${pendingRecords.length}
 NOTE: These records represent attendance captured locally on this hardware device.
@@ -115,7 +115,7 @@ NOTE: These records represent attendance captured locally on this hardware devic
       const downloadUrl = window.URL.createObjectURL(zipBlob);
       const a = document.createElement('a');
       a.href = downloadUrl;
-      a.download = `MRF_Offline_Recovery_${new Date().toISOString().slice(0, 10)}.zip`;
+      a.download = `MITM_Students_Offline_Recovery_${new Date().toISOString().slice(0, 10)}.zip`;
       a.click();
       window.URL.revokeObjectURL(downloadUrl);
 
@@ -155,59 +155,17 @@ NOTE: These records represent attendance captured locally on this hardware devic
             </CardHeader>
             <CardContent className="space-y-3 pt-0">
               <p className="text-xs text-[#667085] mb-2">
-                Printable landscape PDF dossiers with attendee face photos, full names, PhD IDs, guide names, departments, and timestamps.
+                Printable landscape PDF with each student's photo, name, college and check-in time.
               </p>
 
-              {/* Guides PDF */}
-              <div className="p-3 bg-white border border-[#E4E9F0] rounded-lg shadow-2xs hover:border-[#2864B4] transition-all">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-xs font-bold text-[#142D4E] flex items-center gap-1.5">
-                      <Award className="w-3.5 h-3.5 text-[#2864B4] shrink-0" /> Guides Attendance (PDF)
-                    </p>
-                    <p className="text-[11px] text-[#667085] truncate">Photos, emails, departments, timestamps</p>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleServerExport('pdf', 'guide')}
-                    isLoading={isExporting === 'pdf_guide_attendance'}
-                    className="shrink-0 text-xs border-[#CBD5E1] hover:border-[#2864B4] text-[#142D4E]"
-                  >
-                    <Download className="w-3.5 h-3.5 mr-1 text-[#C93B2B]" /> PDF
-                  </Button>
-                </div>
-              </div>
-
-              {/* PhD Scholars PDF */}
-              <div className="p-3 bg-white border border-[#E4E9F0] rounded-lg shadow-2xs hover:border-[#2864B4] transition-all">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-xs font-bold text-[#142D4E] flex items-center gap-1.5">
-                      <Camera className="w-3.5 h-3.5 text-[#E65100] shrink-0" /> PhD Scholars (PDF)
-                    </p>
-                    <p className="text-[11px] text-[#667085] truncate">Photos, PhD IDs, emails, guides, depts</p>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleServerExport('pdf', 'phd_scholar')}
-                    isLoading={isExporting === 'pdf_phd_scholar_attendance'}
-                    className="shrink-0 text-xs border-[#CBD5E1] hover:border-[#2864B4] text-[#142D4E]"
-                  >
-                    <Download className="w-3.5 h-3.5 mr-1 text-[#C93B2B]" /> PDF
-                  </Button>
-                </div>
-              </div>
-
-              {/* Combined PDF */}
+              {/* All students PDF */}
               <div className="p-3 bg-[#142D4E] text-white rounded-lg shadow-sm">
                 <div className="flex items-center justify-between gap-2">
                   <div className="min-w-0">
                     <p className="text-xs font-bold text-white flex items-center gap-1.5">
-                      <Sparkles className="w-3.5 h-3.5 text-[#84ADFF] shrink-0" /> Combined Attendance (PDF)
+                      <Sparkles className="w-3.5 h-3.5 text-[#84ADFF] shrink-0" /> Student Attendance (PDF)
                     </p>
-                    <p className="text-[11px] text-[#CBD5E1] truncate">All scholars &amp; guides with photos</p>
+                    <p className="text-[11px] text-[#CBD5E1] truncate">All checked-in students with photos</p>
                   </div>
                   <Button
                     variant="primary"
@@ -237,53 +195,15 @@ NOTE: These records represent attendance captured locally on this hardware devic
             </CardHeader>
             <CardContent className="space-y-3 pt-0">
               <p className="text-xs text-[#667085] mb-2">
-                Formatted multi-column spreadsheets with auto-adjusted widths, categories, guide mappings, and timestamps.
+                Spreadsheet of student names, colleges and check-in times.
               </p>
 
-              {/* Guides Excel */}
+              {/* All students Excel */}
               <div className="p-3 bg-[#F7F9FC] border border-[#E4E9F0] rounded-lg">
                 <div className="flex items-center justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="text-xs font-bold text-[#182230]">Guides Attendance (Excel)</p>
-                    <p className="text-[11px] text-[#667085] truncate">Verified Guides check-ins only</p>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleServerExport('xlsx', 'guide')}
-                    isLoading={isExporting === 'xlsx_guide_attendance'}
-                    className="shrink-0 text-xs"
-                  >
-                    <Download className="w-3.5 h-3.5 mr-1 text-[#16835D]" /> Export
-                  </Button>
-                </div>
-              </div>
-
-              {/* PhD Scholars Excel */}
-              <div className="p-3 bg-[#F7F9FC] border border-[#E4E9F0] rounded-lg">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-xs font-bold text-[#182230]">PhD Scholars (Excel)</p>
-                    <p className="text-[11px] text-[#667085] truncate">Verified PhD Scholars check-ins only</p>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleServerExport('xlsx', 'phd_scholar')}
-                    isLoading={isExporting === 'xlsx_phd_scholar_attendance'}
-                    className="shrink-0 text-xs"
-                  >
-                    <Download className="w-3.5 h-3.5 mr-1 text-[#16835D]" /> Export
-                  </Button>
-                </div>
-              </div>
-
-              {/* Combined Excel */}
-              <div className="p-3 bg-[#F7F9FC] border border-[#E4E9F0] rounded-lg">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-xs font-bold text-[#182230]">Combined Attendance (Excel)</p>
-                    <p className="text-[11px] text-[#667085] truncate">Full official event retreat workbook</p>
+                    <p className="text-xs font-bold text-[#182230]">Student Attendance (Excel)</p>
+                    <p className="text-[11px] text-[#667085] truncate">All checked-in students</p>
                   </div>
                   <Button
                     variant="primary"
@@ -316,50 +236,12 @@ NOTE: These records represent attendance captured locally on this hardware devic
                 Standard RFC 4180 CSV exports with formula injection sanitization, suitable for external SIS or database import.
               </p>
 
-              {/* Guides CSV */}
+              {/* All students CSV */}
               <div className="p-3 bg-[#F7F9FC] border border-[#E4E9F0] rounded-lg">
                 <div className="flex items-center justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="text-xs font-bold text-[#182230]">Guides Attendance (CSV)</p>
-                    <p className="text-[11px] text-[#667085] truncate">Verified Guides check-ins only</p>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleServerExport('csv', 'guide')}
-                    isLoading={isExporting === 'csv_guide_attendance'}
-                    className="shrink-0 text-xs"
-                  >
-                    <Download className="w-3.5 h-3.5 mr-1 text-[#2864B4]" /> Export
-                  </Button>
-                </div>
-              </div>
-
-              {/* PhD Scholars CSV */}
-              <div className="p-3 bg-[#F7F9FC] border border-[#E4E9F0] rounded-lg">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-xs font-bold text-[#182230]">PhD Scholars (CSV)</p>
-                    <p className="text-[11px] text-[#667085] truncate">Verified PhD Scholars check-ins only</p>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleServerExport('csv', 'phd_scholar')}
-                    isLoading={isExporting === 'csv_phd_scholar_attendance'}
-                    className="shrink-0 text-xs"
-                  >
-                    <Download className="w-3.5 h-3.5 mr-1 text-[#2864B4]" /> Export
-                  </Button>
-                </div>
-              </div>
-
-              {/* Combined CSV */}
-              <div className="p-3 bg-[#F7F9FC] border border-[#E4E9F0] rounded-lg">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-xs font-bold text-[#182230]">Combined Attendance (CSV)</p>
-                    <p className="text-[11px] text-[#667085] truncate">All verified event attendees</p>
+                    <p className="text-xs font-bold text-[#182230]">Student Attendance (CSV)</p>
+                    <p className="text-[11px] text-[#667085] truncate">All checked-in students</p>
                   </div>
                   <Button
                     variant="primary"
@@ -383,12 +265,12 @@ NOTE: These records represent attendance captured locally on this hardware devic
         <Card className="border border-[#2864B4]/20 bg-gradient-to-br from-white to-[#F0F5FC]">
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2 text-[#142D4E]">
-              <Users className="w-4 h-4 text-[#2864B4]" /> Master Registered Scholars &amp; Guides Directory
+              <Users className="w-4 h-4 text-[#2864B4]" /> All Registered Students
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-xs text-[#667085]">
-              Export the complete master registry of all enrolled PhD Scholars and Guides with their registered emails, PhD IDs, guide assignments, department affiliations, and check-in status (with photos if checked in).
+              Export every student who has registered at the kiosk, with their college and check-in status (with photos if checked in).
             </p>
 
             <div className="flex flex-col sm:flex-row gap-3">

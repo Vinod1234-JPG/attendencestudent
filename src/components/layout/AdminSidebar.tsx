@@ -6,7 +6,6 @@ import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard,
   QrCode,
-  Upload,
   ClipboardList,
   Download,
   Settings,
@@ -15,7 +14,8 @@ import {
   LogOut,
   Shield,
   GraduationCap,
-  Users
+  Users,
+  UserPlus,
 } from 'lucide-react';
 
 interface AdminSidebarProps {
@@ -42,9 +42,9 @@ export function AdminSidebar({
 
   const navItems = [
     { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
+    { label: 'Student Registration', href: '/admin/students', icon: UserPlus },
     { label: 'Registered Attendees', href: '/admin/attendees', icon: Users },
     { label: 'Take Attendance', href: '/kiosk', icon: QrCode, isExternal: true },
-    { label: 'Upload MRF Data', href: '/admin/import', icon: Upload },
     { label: 'Attendance Records', href: '/admin/attendance', icon: ClipboardList },
     { label: 'Export Attendance Details', href: '/admin/exports', icon: Download },
     { label: 'Event Settings', href: '/admin/event', icon: Settings },
@@ -61,8 +61,8 @@ export function AdminSidebar({
           <img src="/logo.jpg" alt="MRF Logo" className="w-full h-full object-contain rounded-full" />
         </div>
         <div className="overflow-hidden">
-          <h1 className="font-bold text-sm tracking-wide text-white leading-tight">MRF EVENT ATTENDANCE</h1>
-          <p className="text-[11px] text-[#CBD5E1] truncate">Maharaja Research Foundation</p>
+          <h1 className="font-bold text-sm tracking-wide text-white leading-tight">MIT MYSORE STUDENTS</h1>
+          <p className="text-[11px] text-[#CBD5E1] truncate">Attendance Tracker</p>
         </div>
       </div>
 

@@ -11,7 +11,7 @@ export interface DevAttendeeRecord {
   attendee: {
     id: string;
     name: string;
-    category: 'guide' | 'phd_scholar';
+    category: 'guide' | 'phd_scholar' | 'student';
     identifier: string;
     extra_details?: Record<string, any>;
   };
@@ -26,9 +26,12 @@ export interface DevAttendeeRecord {
 export interface DevPerson {
   id: string;
   name: string;
-  category: 'guide' | 'phd_scholar';
+  category: 'guide' | 'phd_scholar' | 'student';
   normalized_email?: string | null;
   phd_id?: string | null;
+  college?: string | null;
+  student_key?: string | null;
+  created_at?: string;
   metadata?: Record<string, any>;
 }
 

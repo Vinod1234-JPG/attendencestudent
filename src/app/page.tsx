@@ -25,9 +25,9 @@ export default function HomePage() {
           </div>
           <div>
             <h1 className="text-sm font-bold text-[#142D4E] tracking-tight">
-              MAHARAJA RESEARCH FOUNDATION
+              MIT MYSORE STUDENT ATTENDANCE TRACKER
             </h1>
-            <p className="text-[11px] text-[#667085]">Academic Event Attendance Management</p>
+            <p className="text-[11px] text-[#667085]">Student Attendance Management</p>
           </div>
         </div>
 
@@ -43,13 +43,13 @@ export default function HomePage() {
         <div className="max-w-4xl w-full text-center space-y-8">
           <div>
             <span className="inline-block px-3.5 py-1 rounded-full text-xs font-semibold bg-[#EAF2FC] text-[#2864B4] mb-3">
-              MRF Research Retreat Attendance System
+              Student Attendance System
             </span>
             <h2 className="text-3xl md:text-5xl font-extrabold text-[#142D4E] tracking-tight leading-tight">
-              MRF Event Attendance Tracker
+              MIT Mysore Student Attendance Tracker
             </h2>
             <p className="text-sm md:text-base text-[#667085] max-w-2xl mx-auto mt-3">
-              Official self-service kiosk and management system for Guides and PhD Scholars.
+              Self-service attendance kiosk for students. First-time students register with their name and college.
               Equipped with live camera verification, resilient offline caching, and automatic Supabase cloud synchronization.
             </p>
           </div>
@@ -64,7 +64,7 @@ export default function HomePage() {
                   </div>
                   <h3 className="text-xl font-bold text-[#142D4E]">Take Attendance Kiosk</h3>
                   <p className="text-xs text-[#667085] mt-2 leading-relaxed">
-                    Self-service entrance terminal for Guides (via registered email) and PhD Scholars (via official PhD ID) with live photograph capture.
+                    Self-service check-in for students with their name, college and a live photograph.
                   </p>
                 </div>
                 <div className="mt-6 flex items-center gap-1.5 text-xs font-bold text-[#2864B4]">
@@ -82,7 +82,7 @@ export default function HomePage() {
                   </div>
                   <h3 className="text-xl font-bold text-[#142D4E]">Administrator Portal</h3>
                   <p className="text-xs text-[#667085] mt-2 leading-relaxed">
-                    Real-time attendance dashboard, spreadsheet data import, CSV/Excel/ZIP export, sync queue manager, and audit logs.
+                    Real-time attendance dashboard, registered students, CSV/Excel/PDF/ZIP export, sync queue manager, and audit logs.
                   </p>
                 </div>
                 <div className="mt-6 flex items-center gap-1.5 text-xs font-bold text-[#142D4E]">

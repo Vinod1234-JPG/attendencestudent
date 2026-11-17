@@ -1,9 +1,13 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { requireAdmin } from '@/lib/auth/requireAdmin';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
+  const auth = await requireAdmin();
+  if (auth.response) return auth.response;
+
   try {
     const { searchParams } = new URL(request.url);
     const key = searchParams.get('key');
@@ -26,7 +30,7 @@ export async function GET(request: Request) {
     return new NextResponse(arrayBuffer, {
       headers: {
         'Content-Type': data.type || 'image/jpeg',
-        'Cache-Control': 'public, max-age=86400, stale-while-revalidate=86400',
+        'Cache-Control': 'private, max-age=3600',
       },
     });
   } catch (err: any) {

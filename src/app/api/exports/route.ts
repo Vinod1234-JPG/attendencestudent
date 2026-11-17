@@ -5,6 +5,7 @@ import JSZip from 'jszip';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { recordAuditLog } from '@/lib/utils/audit';
+import { requireAdmin } from '@/lib/auth/requireAdmin';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,6 +20,9 @@ function sanitizeCell(val: any): string {
 }
 
 export async function GET(request: Request) {
+  const auth = await requireAdmin();
+  if (auth.response) return auth.response;
+
   try {
     const { searchParams } = new URL(request.url);
     const format = searchParams.get('format') || 'csv'; // 'csv', 'xlsx', 'zip', 'pdf'
@@ -37,6 +41,7 @@ export async function GET(request: Request) {
         category,
         normalized_email,
         phd_id,
+        college,
         metadata
       `);
 
@@ -44,6 +49,8 @@ export async function GET(request: Request) {
         peopleQuery = peopleQuery.eq('category', 'guide');
       } else if (category === 'phd_scholar') {
         peopleQuery = peopleQuery.eq('category', 'phd_scholar');
+      } else if (category === 'student') {
+        peopleQuery = peopleQuery.eq('category', 'student');
       }
 
       peopleQuery = peopleQuery.order('category', { ascending: false }).order('name', { ascending: true });
@@ -88,7 +95,7 @@ export async function GET(request: Request) {
           captured_at_device: att?.captured_at_device || null,
           received_at_server: att?.received_at_server || null,
           status: att ? 'confirmed' : 'registered_pending',
-          event_sessions: att?.event_sessions || { name: 'General Session', events: { name: 'MRF Research Retreat' } },
+          event_sessions: att?.event_sessions || { name: 'General Session', events: { name: 'MIT Mysore Student Attendance' } },
           people: p,
           attendance_photos: att?.attendance_photos || null,
         };
@@ -115,6 +122,7 @@ export async function GET(request: Request) {
           category,
           normalized_email,
           phd_id,
+          college,
           metadata
         ),
         attendance_photos (
@@ -128,6 +136,8 @@ export async function GET(request: Request) {
         query = query.eq('people.category', 'guide');
       } else if (category === 'phd_scholar') {
         query = query.eq('people.category', 'phd_scholar');
+      } else if (category === 'student') {
+        query = query.eq('people.category', 'student');
       }
 
       query = query.order('captured_at_device', { ascending: true });
@@ -146,31 +156,17 @@ export async function GET(request: Request) {
       const p = r.people;
       const photo = Array.isArray(r.attendance_photos) ? r.attendance_photos[0] : r.attendance_photos;
 
-      const email = p.normalized_email || p.metadata?.Email || p.metadata?.email || p.metadata?.['Email ID'] || p.metadata?.['Email Address'] || '';
-      const phdId = p.phd_id || p.metadata?.['PhD ID'] || p.metadata?.['Ph.D ID'] || p.metadata?.USN || p.metadata?.usn || '';
-      const guideName = p.metadata?.['Guide Name'] || p.metadata?.['Guide'] || p.metadata?.guide || p.metadata?.['Research Guide'] || (p.category === 'guide' ? 'Research Supervisor' : '');
-      const mobile = p.metadata?.Mobile || p.metadata?.Phone || p.metadata?.phone || p.metadata?.['Contact No'] || p.metadata?.['Mobile No'] || '';
-      const dept = p.metadata?.Department || p.metadata?.department || p.metadata?.Affiliation || p.metadata?.College || p.metadata?.Institution || p.metadata?.Commerce || '';
-      const topic = p.metadata?.Topic || p.metadata?.topic || p.metadata?.['Research Topic'] || '';
-
       return {
         'S.No': idx + 1,
         'Attendance Record ID': sanitizeCell(r.id),
         'Operation ID': sanitizeCell(r.operation_id),
-        'Attendee Name': sanitizeCell(p.name),
-        Category: p.category === 'guide' ? 'Guide' : 'PhD Scholar',
-        'Registered Identifier': sanitizeCell(p.category === 'guide' ? email : phdId),
-        'Email Address': sanitizeCell(email),
-        'PhD ID / USN': sanitizeCell(phdId),
-        'Guide / Supervisor': sanitizeCell(guideName),
-        'Mobile / Contact': sanitizeCell(mobile),
-        'Department / College': sanitizeCell(dept),
-        'Research Topic': sanitizeCell(topic),
-        'Event Name': sanitizeCell(r.event_sessions?.events?.name || 'MRF Research Retreat'),
+        'Student Name': sanitizeCell(p.name),
+        'College Name': sanitizeCell((p.college || p.metadata?.College || p.metadata?.Institution || '')),
+        'Event Name': sanitizeCell(r.event_sessions?.events?.name || 'MIT Mysore Student Attendance'),
         'Session Name': sanitizeCell(r.event_sessions?.name || 'General Session'),
-        'Local Capture Time': sanitizeCell(r.captured_at_device || 'Awaiting Check-In'),
-        'Server Receipt Time': sanitizeCell(r.received_at_server || 'Awaiting Check-In'),
-        'Record Status': r.status === 'confirmed' ? 'Confirmed' : 'Pending Check-In',
+        'Local Capture Time': sanitizeCell(r.captured_at_device || 'Not Yet Checked In'),
+        'Server Receipt Time': sanitizeCell(r.received_at_server || 'Not Yet Checked In'),
+        'Record Status': r.status === 'confirmed' ? 'Confirmed' : 'Not Yet Checked In',
         'Photograph Available': photo ? 'YES' : 'NO',
         'Photo Object Key': sanitizeCell(photo?.storage_object_key || ''),
       };
@@ -188,7 +184,7 @@ export async function GET(request: Request) {
         metadata: { format: 'csv', category, source, count: items.length },
       });
 
-      const filename = `MRF_${source === 'registered' ? 'Registered_Directory' : 'Attendance'}_${category}_${new Date().toISOString().slice(0, 10)}.csv`;
+      const filename = `MITM_Students_${source === 'registered' ? 'Registered_Directory' : 'Attendance'}_${new Date().toISOString().slice(0, 10)}.csv`;
       return new NextResponse(csv, {
         headers: {
           'Content-Type': 'text/csv; charset=utf-8',
@@ -235,7 +231,7 @@ export async function GET(request: Request) {
         metadata: { format: 'xlsx', category, source, count: items.length },
       });
 
-      const filename = `MRF_${source === 'registered' ? 'Registered_Directory' : 'Attendance'}_${category}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      const filename = `MITM_Students_${source === 'registered' ? 'Registered_Directory' : 'Attendance'}_${new Date().toISOString().slice(0, 10)}.xlsx`;
       return new NextResponse(buffer, {
         headers: {
           'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -244,42 +240,35 @@ export async function GET(request: Request) {
       });
     }
 
-    // Handle PDF Format (with Photos, Names, Emails, PhD IDs, Guide Names, Affiliations, Timestamps)
+    // Handle PDF Format (with photos, student names, colleges and check-in times)
     if (format === 'pdf') {
       const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
       const pageWidth = doc.internal.pageSize.getWidth();
       const pageHeight = doc.internal.pageSize.getHeight();
 
       // Top Header Banner
-      doc.setFillColor(20, 45, 78); // #142D4E MRF Navy
+      doc.setFillColor(20, 45, 78); // #142D4E navy
       doc.rect(0, 0, pageWidth, 26, 'F');
 
       // Institutional Header
       doc.setTextColor(255, 255, 255);
       doc.setFontSize(13);
       doc.setFont('helvetica', 'bold');
-      doc.text('MAHARAJA RESEARCH FOUNDATION (MRF) & MIT MYSORE', 12, 10);
+      doc.text('MIT MYSORE STUDENT ATTENDANCE TRACKER', 12, 10);
 
       doc.setFontSize(9);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(234, 242, 252);
       const subTitle =
         source === 'registered'
-          ? 'MRF Research Retreat — Master Registered Scholars & Guides Directory'
-          : 'MRF Research Retreat — Verified Attendance Dossier';
+          ? 'Registered Students Directory'
+          : 'Verified Student Attendance Report';
       doc.text(subTitle, 12, 16);
-
-      const categoryLabel =
-        category === 'guide'
-          ? 'Guides Only'
-          : category === 'phd_scholar'
-          ? 'PhD Scholars Only'
-          : 'All Scholars & Guides';
 
       doc.setFontSize(7.5);
       doc.setTextColor(203, 213, 225);
       doc.text(
-        `Generated: ${new Date().toLocaleString()} | Filter: ${categoryLabel} | Scope: ${source === 'registered' ? 'Complete Registry' : 'Verified Attendance'} | Total Attendees: ${items.length}`,
+        `Generated: ${new Date().toLocaleString()} | Scope: ${source === 'registered' ? 'All Registered Students' : 'Verified Attendance'} | Total Students: ${items.length}`,
         12,
         22
       );
@@ -314,42 +303,7 @@ export async function GET(request: Request) {
         const p = r.people;
         const photoData = photoDataUrls[r.id];
 
-        // Format identifier and contact details
-        let contactInfo = '';
-        if (p.category === 'guide') {
-          const email = p.normalized_email || p.metadata?.Email || p.metadata?.email || p.metadata?.['Email ID'] || '—';
-          contactInfo = `Email: ${email}`;
-          const mobile = p.metadata?.Mobile || p.metadata?.Phone || p.metadata?.phone || p.metadata?.['Contact No'] || p.metadata?.['Mobile No'];
-          if (mobile) contactInfo += `\nMobile: ${mobile}`;
-        } else {
-          const phdId = p.phd_id || p.metadata?.['PhD ID'] || p.metadata?.['Ph.D ID'] || p.metadata?.USN || '—';
-          contactInfo = `PhD ID: ${phdId}`;
-          const email = p.normalized_email || p.metadata?.Email || p.metadata?.email || p.metadata?.['Email ID'] || p.metadata?.['Email Address'];
-          if (email) contactInfo += `\nEmail: ${email}`;
-          const mobile = p.metadata?.Mobile || p.metadata?.Phone || p.metadata?.phone || p.metadata?.['Contact No'] || p.metadata?.['Mobile No'];
-          if (mobile) contactInfo += `\nMobile: ${mobile}`;
-        }
-
-        // Format Guide / Supervisor
-        let guideInfo = '—';
-        if (p.category === 'phd_scholar') {
-          const gName = p.metadata?.['Guide Name'] || p.metadata?.['Guide'] || p.metadata?.guide || p.metadata?.['Research Guide'] || p.metadata?.['Supervisor'];
-          guideInfo = gName ? `Guide: ${gName}` : 'Guide: Not Specified';
-          const topic = p.metadata?.Topic || p.metadata?.topic || p.metadata?.['Research Topic'];
-          if (topic) guideInfo += `\nTopic: ${topic}`;
-        } else {
-          guideInfo = 'Role: Research Guide';
-        }
-
-        // Format Department / Affiliation
-        const dept =
-          p.metadata?.Department ||
-          p.metadata?.department ||
-          p.metadata?.Affiliation ||
-          p.metadata?.College ||
-          p.metadata?.Institution ||
-          p.metadata?.Commerce ||
-          'MRF / MIT Mysore';
+        const college = (p.college || p.metadata?.College || p.metadata?.Institution || '') || '—';
 
         // Format Attendance status and timestamp
         let statusDisplay = '';
@@ -362,17 +316,14 @@ export async function GET(request: Request) {
           });
           statusDisplay = `${formattedTime}\nConfirmed`;
         } else {
-          statusDisplay = 'Pending Check-In';
+          statusDisplay = 'Not Yet Checked In';
         }
 
         return [
           String(idx + 1),
           photoData || '',
           p.name || 'Unknown',
-          p.category === 'guide' ? 'Guide' : 'PhD Scholar',
-          contactInfo,
-          guideInfo,
-          dept,
+          college,
           statusDisplay,
         ];
       });
@@ -382,8 +333,8 @@ export async function GET(request: Request) {
         startY: 30,
         margin: { left: 12, right: 12 },
         tableWidth: 273,
-        head: [['#', 'Photo', 'Attendee Name', 'Category', 'Identifier & Contact', 'Research Guide / Topic', 'Department / Institution', 'Check-In Status']],
-        body: tableRows.map((r) => [r[0], '', r[2], r[3], r[4], r[5], r[6], r[7]]),
+        head: [['#', 'Photo', 'Student Name', 'College Name', 'Check-In Status']],
+        body: tableRows.map((r) => [r[0], '', r[2], r[3], r[4]]),
         theme: 'grid',
         headStyles: {
           fillColor: [20, 45, 78], // #142D4E
@@ -404,12 +355,9 @@ export async function GET(request: Request) {
         columnStyles: {
           0: { cellWidth: 8, halign: 'center' },
           1: { cellWidth: 24, halign: 'center' },
-          2: { cellWidth: 38, fontStyle: 'bold' },
-          3: { cellWidth: 22, halign: 'center' },
-          4: { cellWidth: 54 },
-          5: { cellWidth: 46 },
-          6: { cellWidth: 45 },
-          7: { cellWidth: 36, halign: 'center', fontStyle: 'bold' },
+          2: { cellWidth: 80, fontStyle: 'bold' },
+          3: { cellWidth: 110 },
+          4: { cellWidth: 51, halign: 'center', fontStyle: 'bold' },
         },
         didDrawCell: (data: any) => {
           if (data.column.index === 1 && data.cell.section === 'body') {
@@ -439,7 +387,7 @@ export async function GET(request: Request) {
           doc.setFontSize(7.5);
           doc.setTextColor(102, 112, 133);
           doc.text(
-            `Maharaja Research Foundation — Official Audit Docket | Page ${pageNum}`,
+            `MIT Mysore Student Attendance Tracker | Page ${pageNum}`,
             12,
             pageHeight - 5
           );
@@ -460,7 +408,7 @@ export async function GET(request: Request) {
         metadata: { format: 'pdf', category, source, count: items.length },
       });
 
-      const filename = `MRF_${source === 'registered' ? 'Registered_Directory' : 'Attendance'}_${category}_${new Date().toISOString().slice(0, 10)}.pdf`;
+      const filename = `MITM_Students_${source === 'registered' ? 'Registered_Directory' : 'Attendance'}_${new Date().toISOString().slice(0, 10)}.pdf`;
       return new NextResponse(pdfBuffer, {
         headers: {
           'Content-Type': 'application/pdf',
@@ -483,9 +431,8 @@ export async function GET(request: Request) {
         return {
           'Attendance Record ID': sanitizeCell(r.id),
           'Operation ID': sanitizeCell(r.operation_id),
-          'Attendee Name': sanitizeCell(p.name),
-          Category: p.category === 'guide' ? 'Guide' : 'PhD Scholar',
-          'Registered Identifier': sanitizeCell(p.category === 'guide' ? p.normalized_email : p.phd_id),
+          'Student Name': sanitizeCell(p.name),
+          'College Name': sanitizeCell((p.college || p.metadata?.College || p.metadata?.Institution || '')),
           'Captured Timestamp': sanitizeCell(r.captured_at_device),
           'Photo Filename': filename,
           'Storage Key': sanitizeCell(photo?.storage_object_key || ''),
@@ -499,12 +446,12 @@ export async function GET(request: Request) {
       // 2. Add README
       zip.file(
         'README.txt',
-        `MAHARAJA RESEARCH FOUNDATION (MRF) - ATTENDANCE PHOTOGRAPHS ARCHIVE
+        `MIT MYSORE STUDENT ATTENDANCE TRACKER - ATTENDANCE PHOTOGRAPHS ARCHIVE
 Generated: ${new Date().toISOString()}
 Total Records: ${items.length}
 
 Structure:
-- manifest.csv: Maps attendee metadata, identifiers, and timestamps to photo filenames.
+- manifest.csv: Maps student names, colleges and timestamps to photo filenames.
 - /photos: Contains high-resolution JPG images captured during attendance verification. Filename format: <operation_id>.jpg
 
 Confidential. For authorized institutional use only.`
@@ -544,7 +491,7 @@ Confidential. For authorized institutional use only.`
         metadata: { format: 'zip', category, count: items.length },
       });
 
-      const filename = `MRF_Attendance_Photos_${category}_${new Date().toISOString().slice(0, 10)}.zip`;
+      const filename = `MITM_Students_Attendance_Photos_${new Date().toISOString().slice(0, 10)}.zip`;
       return new NextResponse(zipBlob as any, {
         headers: {
           'Content-Type': 'application/zip',

@@ -176,11 +176,14 @@ NEXT_PUBLIC_APP_TITLE="MRF Research Retreat Attendance Tracker"
 
 ## 9. Administrator Credentials
 
-- **Production Cloud Auth:** Managed via Supabase Dashboard -> Authentication.
-- **Development / Emergency Master Administrator:**
-  - **Email:** `admin@mrf.org`
-  - **Password:** `MRF@Conclave2026`
-  *(All master administrator sessions are cryptographically logged in `audit_logs`).*
+There are no built-in or shared passwords. Every `/admin` page and every non-kiosk `/api` route requires a signed-in administrator (enforced in `src/middleware.ts` and again in each route via `requireAdmin()`).
+
+- **Production (Supabase):** an administrator is a Supabase Auth user who has a row in `public.profiles` with `role` = `admin` or `super_admin`. To add one:
+  1. Supabase Dashboard → Authentication → Users → *Add user* (set a strong password, auto-confirm).
+  2. In the SQL Editor: `INSERT INTO public.profiles (id, role, full_name) VALUES ('<user uuid>', 'admin', 'Name');`
+- **Local development without Supabase:** set `ADMIN_EMAIL`, `ADMIN_PASSWORD` and `ADMIN_SESSION_SECRET` (32+ random characters) in `.env.local`. Login is refused until all three are set.
+
+Public (no login) routes are only those the kiosk needs: `/api/kiosk/*`, `/api/sync/upload`, `/api/auth/login`, `/api/auth/logout`.
 
 ---
 

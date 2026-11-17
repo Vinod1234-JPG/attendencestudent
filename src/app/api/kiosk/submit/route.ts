@@ -2,44 +2,63 @@ import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { recordAuditLog } from '@/lib/utils/audit';
 import { addDevAttendanceRecord, getDevStorage } from '@/lib/db/devStore';
-import { isNameMatching } from '@/lib/utils/normalization';
+import { isPlaceholderMode } from '@/lib/auth/adminSession';
+import { cleanDisplayText, validateStudentDetails } from '@/lib/utils/normalization';
+import { findOrCreateDevStudent, findOrCreateStudent } from '@/lib/students/findOrCreateStudent';
 
+export const dynamic = 'force-dynamic';
+
+const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
+const ALLOWED_PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+
+/**
+ * Records a student's attendance. First-time students (name + college not seen
+ * before) are registered here, in the same request.
+ */
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();
 
     const operationId = formData.get('operation_id') as string;
     const sessionId = formData.get('session_id') as string;
-    const personId = formData.get('person_id') as string;
-    const attendeeName = (formData.get('attendee_name') as string) || 'Attendee';
-    const category = (formData.get('category') as string) || 'guide';
-    const identifier = (formData.get('identifier') as string) || '';
+    const studentName = cleanDisplayText(formData.get('attendee_name') as string);
+    const college = cleanDisplayText(formData.get('college') as string);
     const capturedAtDevice = formData.get('captured_at_device') as string;
     const photoFile = formData.get('photo') as File | null;
 
-    if (!operationId || !sessionId || !personId || !photoFile) {
+    if (!operationId || !sessionId || !photoFile) {
       return NextResponse.json(
         { error: 'Missing required attendance submission fields or photograph.' },
         { status: 400 }
       );
     }
 
-    const isPlaceholder =
-      !process.env.NEXT_PUBLIC_SUPABASE_URL ||
-      process.env.NEXT_PUBLIC_SUPABASE_URL.includes('placeholder');
+    const invalid = validateStudentDetails(studentName, college);
+    if (invalid) {
+      return NextResponse.json({ error: invalid }, { status: 400 });
+    }
+
+    const photoType = photoFile.type || 'image/jpeg';
+    if (!ALLOWED_PHOTO_TYPES.includes(photoType) || photoFile.size === 0 || photoFile.size > MAX_PHOTO_BYTES) {
+      return NextResponse.json(
+        { error: 'The attendance photo is missing or invalid. Please retake your photo.' },
+        { status: 400 }
+      );
+    }
 
     const photoBuffer = Buffer.from(await photoFile.arrayBuffer());
-    const base64Photo = `data:${photoFile.type || 'image/jpeg'};base64,${photoBuffer.toString('base64')}`;
     const nowIso = new Date().toISOString();
 
-    if (isPlaceholder) {
-      const devStore = getDevStorage();
-      const person = devStore.people.find((p) => p.id === personId);
+    // ------------------------------------------------------------------
+    // Development store (no Supabase configured)
+    // ------------------------------------------------------------------
+    if (isPlaceholderMode()) {
+      const person = findOrCreateDevStudent(studentName, college)!;
 
-      if (person && attendeeName && !isNameMatching(attendeeName, person.name)) {
+      if (getDevStorage().attendanceRecords.some((r) => r.attendee.id === person.id)) {
         return NextResponse.json(
-          { error: `The name "${attendeeName}" does not match the registered record (${person.name}).` },
-          { status: 400 }
+          { error: `Attendance has already been recorded for ${person.name}. Duplicate entries are not permitted.` },
+          { status: 409 }
         );
       }
 
@@ -49,19 +68,19 @@ export async function POST(request: Request) {
         captured_at_device: capturedAtDevice || nowIso,
         received_at_server: nowIso,
         status: 'confirmed',
-        session_name: 'General Retreat Check-in Session',
+        session_name: 'General Check-in Session',
         attendee: {
-          id: personId,
-          name: person?.name || attendeeName,
-          category: (person?.category || category) as 'guide' | 'phd_scholar',
-          identifier: person?.normalized_email || person?.phd_id || identifier,
-          extra_details: person?.metadata || {},
+          id: person.id,
+          name: person.name,
+          category: 'student' as const,
+          identifier: person.college || college,
+          extra_details: person.metadata || {},
         },
         photo: {
           available: true,
-          signed_url: base64Photo,
+          signed_url: `data:${photoType};base64,${photoBuffer.toString('base64')}`,
           file_size: photoFile.size,
-          content_type: photoFile.type || 'image/jpeg',
+          content_type: photoType,
         },
       };
 
@@ -71,37 +90,22 @@ export async function POST(request: Request) {
         success: true,
         message: 'Attendance recorded successfully',
         record_id: devRecord.id,
-        attendee_name: devRecord.attendee.name,
-        category: devRecord.attendee.category,
+        attendee_name: person.name,
+        category: 'student',
         attendance_time: devRecord.captured_at_device,
       });
     }
 
+    // ------------------------------------------------------------------
+    // Live (Supabase)
+    // ------------------------------------------------------------------
     const admin = createAdminClient();
 
-    // 1-3. High concurrency optimization: Execute session check, person lookup, and duplicate check concurrently
-    const [
-      { data: session, error: sessErr },
-      { data: person, error: personErr },
-      { data: existingRecord },
-    ] = await Promise.all([
-      admin
-        .from('event_sessions')
-        .select('id, name, status, event_id')
-        .eq('id', sessionId)
-        .single(),
-      admin
-        .from('people')
-        .select('id, name, category, normalized_email, phd_id')
-        .eq('id', personId)
-        .single(),
-      admin
-        .from('attendance_records')
-        .select('id, operation_id, captured_at_device')
-        .eq('session_id', sessionId)
-        .eq('person_id', personId)
-        .maybeSingle(),
-    ]);
+    const { data: session, error: sessErr } = await admin
+      .from('event_sessions')
+      .select('id, name, status, event_id')
+      .eq('id', sessionId)
+      .single();
 
     if (sessErr || !session || session.status !== 'open') {
       return NextResponse.json(
@@ -110,70 +114,65 @@ export async function POST(request: Request) {
       );
     }
 
-    if (personErr || !person) {
-      return NextResponse.json(
-        { error: 'Attendee record not found.' },
-        { status: 404 }
-      );
+    const person = await findOrCreateStudent(admin, studentName, college);
+    const personId = person.id;
+
+    if (person.created) {
+      recordAuditLog({
+        action: 'STUDENT_SELF_REGISTERED',
+        entityType: 'PERSON',
+        entityId: personId,
+        outcome: 'success',
+        metadata: { name: person.name, college: person.college },
+      });
     }
 
-    // 2b. Strictly verify that attendee_name matches the person's registered name
-    if (attendeeName && !isNameMatching(attendeeName, person.name)) {
-      return NextResponse.json(
-        { error: `The name "${attendeeName}" does not match the registered record (${person.name}).` },
-        { status: 400 }
-      );
-    }
+    const { data: existingRecord } = await admin
+      .from('attendance_records')
+      .select('id, operation_id, captured_at_device')
+      .eq('session_id', sessionId)
+      .eq('person_id', personId)
+      .maybeSingle();
 
     if (existingRecord) {
-      // If the same operation_id is sent again, return success idempotently
+      // Same operation re-sent: answer idempotently.
       if (existingRecord.operation_id === operationId) {
         return NextResponse.json({
           success: true,
           message: 'Attendance record previously processed.',
           record_id: existingRecord.id,
           attendee_name: person.name,
-          category: person.category,
+          category: 'student',
           captured_at: existingRecord.captured_at_device,
         });
       }
 
-      // If a different operation tried to submit for the same person
       await recordAuditLog({
         action: 'ATTENDANCE_DUPLICATE_REJECTED',
         entityType: 'ATTENDANCE',
         entityId: personId,
         outcome: 'warning',
-        metadata: {
-          sessionId,
-          personName: person.name,
-          category: person.category,
-        },
+        metadata: { sessionId, personName: person.name, college: person.college },
       });
 
       return NextResponse.json(
         {
-          error: `Attendance has already been recorded for ${person.name}. Duplicate entries are not permitted.`,
+          error: `Attendance has already been recorded for ${person.name} (${person.college}). Duplicate entries are not permitted.`,
         },
         { status: 409 }
       );
     }
 
-    // 4. Upload photo to private Supabase Storage
     const storageKey = `photos/${sessionId}/${personId}_${operationId}.jpg`;
 
     const { error: uploadErr } = await admin.storage
       .from('mrf-attendance-photos')
-      .upload(storageKey, photoBuffer, {
-        contentType: photoFile.type || 'image/jpeg',
-        upsert: true,
-      });
+      .upload(storageKey, photoBuffer, { contentType: photoType, upsert: true });
 
     if (uploadErr) {
-      console.warn('Storage upload error (fallback active if using mock):', uploadErr.message);
+      console.warn('Storage upload error:', uploadErr.message);
     }
 
-    // 5. Insert Attendance Record
     const { data: newRecord, error: insertErr } = await admin
       .from('attendance_records')
       .insert({
@@ -189,7 +188,7 @@ export async function POST(request: Request) {
       .single();
 
     if (insertErr || !newRecord) {
-      // Handle PostgreSQL 23505: Unique constraint violation (Race condition across multiple kiosks)
+      // 23505: another kiosk recorded the same student at the same moment.
       if (
         insertErr?.code === '23505' ||
         insertErr?.message?.includes('duplicate key') ||
@@ -205,18 +204,14 @@ export async function POST(request: Request) {
       }
 
       console.error('Attendance insert error:', insertErr);
-      return NextResponse.json(
-        { error: 'Failed to record attendance in database.' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Failed to record attendance in database.' }, { status: 500 });
     }
 
-    // 6 & 7. Concurrency optimization: persist photo metadata and audit log in parallel
     await Promise.allSettled([
       admin.from('attendance_photos').insert({
         attendance_record_id: newRecord.id,
         storage_object_key: storageKey,
-        content_type: photoFile.type || 'image/jpeg',
+        content_type: photoType,
         file_size: photoFile.size,
         status: 'active',
       }),
@@ -229,7 +224,8 @@ export async function POST(request: Request) {
           sessionId,
           personId,
           personName: person.name,
-          category: person.category,
+          college: person.college,
+          category: 'student',
           operationId,
         },
       }),
@@ -240,14 +236,11 @@ export async function POST(request: Request) {
       message: 'Attendance recorded successfully',
       record_id: newRecord.id,
       attendee_name: person.name,
-      category: person.category,
+      category: 'student',
       attendance_time: newRecord.captured_at_device,
     });
-  } catch (err: any) {
+  } catch (err) {
     console.error('Online attendance submit exception:', err);
-    return NextResponse.json(
-      { error: err.message || 'Server error recording attendance.' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Server error recording attendance.' }, { status: 500 });
   }
 }

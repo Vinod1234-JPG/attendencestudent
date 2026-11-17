@@ -12,7 +12,6 @@ import {
   Database,
   ArrowLeft,
   GraduationCap,
-  Users
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -20,8 +19,7 @@ import { getOfflineDb } from '@/lib/db/dexie';
 
 export default function OfflineReadyPage() {
   const [isPreparing, setIsPreparing] = useState(false);
-  const [guideCount, setGuideCount] = useState(0);
-  const [scholarCount, setScholarCount] = useState(0);
+  const [cachedSessionName, setCachedSessionName] = useState<string | null>(null);
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
   const [lastSyncDate, setLastSyncDate] = useState<string | null>(null);
   const [storageEstimate, setStorageEstimate] = useState<{ usage: number; quota: number } | null>(null);
@@ -31,13 +29,11 @@ export default function OfflineReadyPage() {
   const refreshCounts = async () => {
     try {
       const db = getOfflineDb();
-      const guides = await db.cached_people.where('category').equals('guide').count();
-      const scholars = await db.cached_people.where('category').equals('phd_scholar').count();
+      const session = await db.cached_sessions.where('status').equals('open').first();
       const pending = await db.attendance_queue.where('sync_status').equals('pending').count();
       const meta = await db.sync_metadata.get('last_dataset_sync');
 
-      setGuideCount(guides);
-      setScholarCount(scholars);
+      setCachedSessionName(session ? session.name : null);
       setPendingSyncCount(pending);
       setLastSyncDate(meta ? meta.value : null);
 
@@ -59,7 +55,7 @@ export default function OfflineReadyPage() {
 
   const handlePrepareOffline = async () => {
     setIsPreparing(true);
-    setStatusMessage('Connecting to server to fetch registered attendee records...');
+    setStatusMessage('Connecting to server to fetch the active event and session...');
     setErrorMessage(null);
 
     try {
@@ -67,10 +63,10 @@ export default function OfflineReadyPage() {
       const data = await res.json();
 
       if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Failed to download offline attendee dataset.');
+        throw new Error(data.error || 'Failed to download offline kiosk data.');
       }
 
-      setStatusMessage('Storing event and attendee records into IndexedDB...');
+      setStatusMessage('Saving event and session on this device...');
       const db = getOfflineDb();
 
       // Clear existing cached dataset safely
@@ -82,11 +78,6 @@ export default function OfflineReadyPage() {
       if (data.event) await db.cached_events.put(data.event);
       if (data.session) await db.cached_sessions.put(data.session);
 
-      // Bulk insert people
-      if (data.people && data.people.length > 0) {
-        await db.cached_people.bulkPut(data.people);
-      }
-
       const syncTime = new Date().toISOString();
       await db.sync_metadata.put({
         key: 'last_dataset_sync',
@@ -95,12 +86,12 @@ export default function OfflineReadyPage() {
       });
 
       // Verification: read back from IndexedDB
-      const verifyCount = await db.cached_people.count();
-      if (verifyCount !== data.people.length) {
-        throw new Error('Local verification mismatch: Some records were not persisted in IndexedDB.');
+      const verifySession = await db.cached_sessions.where('status').equals('open').first();
+      if (!verifySession) {
+        throw new Error('Local verification failed: the session was not saved on this device.');
       }
 
-      setStatusMessage(`Offline preparation complete! ${verifyCount} attendees safely cached locally.`);
+      setStatusMessage(`Offline preparation complete! Students can now check in to "${verifySession.name}" without internet.`);
       await refreshCounts();
     } catch (err: any) {
       console.error('Offline preparation error:', err);
@@ -110,7 +101,7 @@ export default function OfflineReadyPage() {
     }
   };
 
-  const isReady = guideCount + scholarCount > 0;
+  const isReady = !!cachedSessionName;
 
   return (
     <div className="min-h-screen bg-[#F7F9FC] p-6 md:p-12">
@@ -128,7 +119,7 @@ export default function OfflineReadyPage() {
               Kiosk Offline Readiness & Preparation
             </h1>
             <p className="text-sm text-[#667085] mt-1">
-              Verify local dataset cache and download offline attendee information for seamless operation.
+              Save the active session on this device so students can check in even without internet.
             </p>
           </div>
           <div
@@ -167,28 +158,18 @@ export default function OfflineReadyPage() {
         )}
 
         {/* Metrics Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
           <Card>
             <CardHeader className="py-3 px-4">
               <span className="text-xs text-[#667085] font-semibold flex items-center gap-1.5">
-                <Users className="w-4 h-4 text-[#2864B4]" /> Cached Guides
+                <GraduationCap className="w-4 h-4 text-[#2864B4]" /> Cached Session
               </span>
             </CardHeader>
             <CardContent className="p-4 pt-1">
-              <p className="text-3xl font-extrabold text-[#142D4E]">{guideCount}</p>
-              <p className="text-[11px] text-[#667085] mt-1">Stored in IndexedDB</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="py-3 px-4">
-              <span className="text-xs text-[#667085] font-semibold flex items-center gap-1.5">
-                <GraduationCap className="w-4 h-4 text-[#2864B4]" /> Cached PhD Scholars
-              </span>
-            </CardHeader>
-            <CardContent className="p-4 pt-1">
-              <p className="text-3xl font-extrabold text-[#142D4E]">{scholarCount}</p>
-              <p className="text-[11px] text-[#667085] mt-1">Stored in IndexedDB</p>
+              <p className="text-lg font-extrabold text-[#142D4E] truncate">
+                {cachedSessionName || 'Not prepared'}
+              </p>
+              <p className="text-[11px] text-[#667085] mt-1">Stored on this device</p>
             </CardContent>
           </Card>
 

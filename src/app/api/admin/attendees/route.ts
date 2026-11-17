@@ -2,12 +2,16 @@ import { NextResponse } from 'next/server';
 import { unstable_noStore as noStore } from 'next/cache';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getDevStorage } from '@/lib/db/devStore';
+import { requireAdmin } from '@/lib/auth/requireAdmin';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 export const fetchCache = 'force-no-store';
 
 export async function GET(request: Request) {
+  const auth = await requireAdmin();
+  if (auth.response) return auth.response;
+
   noStore();
   try {
     const { searchParams } = new URL(request.url);
@@ -29,6 +33,8 @@ export async function GET(request: Request) {
           category: p.category,
           email: p.normalized_email || p.metadata?.Email || p.metadata?.email || null,
           phd_id: p.phd_id || null,
+          college: p.college || p.metadata?.College || null,
+          registered_at: p.created_at || null,
           metadata: p.metadata || {},
           attended: !!att,
           attended_at: att?.captured_at_device || null,
@@ -49,15 +55,18 @@ export async function GET(request: Request) {
           (p) =>
             p.name.toLowerCase().includes(search) ||
             (p.email && p.email.toLowerCase().includes(search)) ||
-            (p.phd_id && p.phd_id.toLowerCase().includes(search))
+            (p.phd_id && p.phd_id.toLowerCase().includes(search)) ||
+            (p.college && p.college.toLowerCase().includes(search))
         );
       }
 
       const totalGuides = devStore.people.filter((p) => p.category === 'guide').length;
       const totalScholars = devStore.people.filter((p) => p.category === 'phd_scholar').length;
+      const totalStudents = devStore.people.filter((p) => p.category === 'student').length;
       const totalAttended = devStore.attendanceRecords.length;
       const attendedGuides = people.filter((p) => p.category === 'guide' && p.attended).length;
       const attendedScholars = people.filter((p) => p.category === 'phd_scholar' && p.attended).length;
+      const attendedStudents = people.filter((p) => p.category === 'student' && p.attended).length;
 
       return NextResponse.json(
         {
@@ -66,10 +75,12 @@ export async function GET(request: Request) {
             total: devStore.people.length,
             guides: totalGuides,
             scholars: totalScholars,
+            students: totalStudents,
             attended: totalAttended,
             pending: Math.max(0, devStore.people.length - totalAttended),
             attendedGuides,
             attendedScholars,
+            attendedStudents,
           },
           attendees: people,
         },
@@ -106,6 +117,7 @@ export async function GET(request: Request) {
     const allPeople = peopleRaw || [];
     const totalGuides = allPeople.filter((p) => p.category === 'guide').length;
     const totalScholars = allPeople.filter((p) => p.category === 'phd_scholar').length;
+    const totalStudents = allPeople.filter((p) => p.category === 'student').length;
     const totalAttended = attendanceMap.size;
 
     let attendees = allPeople.map((p) => {
@@ -133,6 +145,8 @@ export async function GET(request: Request) {
         category: p.category,
         email: email || null,
         phd_id: p.phd_id || null,
+        college: p.college || p.metadata?.College || null,
+        registered_at: p.created_at || null,
         metadata: p.metadata || {},
         attended: !!att,
         attended_at: att?.captured_at_device || null,
@@ -157,12 +171,14 @@ export async function GET(request: Request) {
         (p) =>
           p.name.toLowerCase().includes(search) ||
           (p.email && p.email.toLowerCase().includes(search)) ||
-          (p.phd_id && p.phd_id.toLowerCase().includes(search))
+          (p.phd_id && p.phd_id.toLowerCase().includes(search)) ||
+          (p.college && p.college.toLowerCase().includes(search))
       );
     }
 
     const attendedGuides = attendees.filter((p) => p.category === 'guide' && p.attended).length;
     const attendedScholars = attendees.filter((p) => p.category === 'phd_scholar' && p.attended).length;
+    const attendedStudents = attendees.filter((p) => p.category === 'student' && p.attended).length;
 
     return NextResponse.json(
       {
@@ -171,10 +187,12 @@ export async function GET(request: Request) {
           total: allPeople.length,
           guides: totalGuides,
           scholars: totalScholars,
+          students: totalStudents,
           attended: totalAttended,
           pending: Math.max(0, allPeople.length - totalAttended),
           attendedGuides,
           attendedScholars,
+          attendedStudents,
         },
         attendees,
       },
@@ -195,6 +213,9 @@ export async function GET(request: Request) {
 }
 
 export async function DELETE() {
+  const auth = await requireAdmin();
+  if (auth.response) return auth.response;
+
   noStore();
   try {
     const isPlaceholder =

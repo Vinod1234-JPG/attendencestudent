@@ -3,12 +3,16 @@ import { unstable_noStore as noStore } from 'next/cache';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getDevStorage, removeDevAttendanceRecord } from '@/lib/db/devStore';
 import { recordAuditLog } from '@/lib/utils/audit';
+import { requireAdmin } from '@/lib/auth/requireAdmin';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 export const fetchCache = 'force-no-store';
 
 export async function GET(request: Request) {
+  const auth = await requireAdmin();
+  if (auth.response) return auth.response;
+
   noStore();
   try {
     const { searchParams } = new URL(request.url);
@@ -26,7 +30,7 @@ export async function GET(request: Request) {
       const devStore = getDevStorage();
       let records = [...devStore.attendanceRecords];
 
-      if (category && (category === 'guide' || category === 'phd_scholar')) {
+      if (category && (category === 'guide' || category === 'phd_scholar' || category === 'student')) {
         records = records.filter((r) => r.attendee.category === category);
       }
 
@@ -82,6 +86,7 @@ export async function GET(request: Request) {
           category,
           normalized_email,
           phd_id,
+          college,
           metadata
         ),
         event_sessions (
@@ -96,14 +101,15 @@ export async function GET(request: Request) {
         { count: 'exact' }
       );
 
-    if (category && (category === 'guide' || category === 'phd_scholar')) {
+    if (category && (category === 'guide' || category === 'phd_scholar' || category === 'student')) {
       query = query.eq('people.category', category);
     }
 
     if (search.trim()) {
-      const term = search.trim();
+      // Strip characters that have meaning inside a PostgREST or() filter
+      const term = search.trim().replace(/[,()%*\\]/g, ' ');
       query = query.or(
-        `name.ilike.%${term}%,normalized_email.ilike.%${term}%,phd_id.ilike.%${term}%`,
+        `name.ilike.%${term}%,college.ilike.%${term}%,normalized_email.ilike.%${term}%,phd_id.ilike.%${term}%`,
         { foreignTable: 'people' }
       );
     }
@@ -152,8 +158,11 @@ export async function GET(request: Request) {
           category: rec.people.category,
           email: email || null,
           phd_id: rec.people.phd_id || null,
+          college: rec.people.college || rec.people.metadata?.College || null,
           identifier:
-            rec.people.category === 'guide'
+            rec.people.category === 'student'
+              ? (rec.people.college || rec.people.metadata?.College || '—')
+              : rec.people.category === 'guide'
               ? (email || rec.people.normalized_email || '—')
               : (rec.people.phd_id || '—'),
           extra_details: rec.people.metadata || {},
@@ -201,6 +210,9 @@ export async function GET(request: Request) {
  * Resets the attendee's status back to Not Attended (Pending).
  */
 export async function DELETE(request: Request) {
+  const auth = await requireAdmin();
+  if (auth.response) return auth.response;
+
   noStore();
   try {
     const { searchParams } = new URL(request.url);

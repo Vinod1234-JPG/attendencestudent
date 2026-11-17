@@ -1,7 +1,7 @@
 {
-  "name": "MRF Event Attendance Tracker",
-  "short_name": "MRF Attendance",
-  "description": "Maharaja Research Foundation Event Attendance System with Offline Kiosk Support",
+  "name": "MIT Mysore Student Attendance Tracker",
+  "short_name": "MITM Attendance",
+  "description": "MIT Mysore student attendance tracker with offline kiosk support",
   "start_url": "/kiosk",
   "display": "standalone",
   "background_color": "#F7F9FC",

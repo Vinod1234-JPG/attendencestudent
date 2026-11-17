@@ -1,22 +1,35 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { recordAuditLog } from '@/lib/utils/audit';
+import { getCurrentAdmin } from '@/lib/auth/requireAdmin';
+import { DEV_SESSION_COOKIE, isPlaceholderMode } from '@/lib/auth/adminSession';
+
+export const dynamic = 'force-dynamic';
 
 export async function POST() {
+  const response = NextResponse.json({ success: true });
+  response.cookies.delete(DEV_SESSION_COOKIE);
+
   try {
-    const supabase = createServerSupabaseClient();
-    await supabase.auth.signOut();
+    const admin = await getCurrentAdmin();
 
-    await recordAuditLog({
-      action: 'ADMIN_LOGOUT',
-      entityType: 'AUTH',
-      outcome: 'success',
-    });
+    if (!isPlaceholderMode()) {
+      const supabase = createServerSupabaseClient();
+      await supabase.auth.signOut();
+    }
 
-    const response = NextResponse.json({ success: true });
-    response.cookies.delete('mrf_admin_session');
-    return response;
-  } catch (err: any) {
-    return NextResponse.json({ success: true });
+    if (admin) {
+      await recordAuditLog({
+        actorId: admin.id,
+        action: 'ADMIN_LOGOUT',
+        entityType: 'AUTH',
+        entityId: admin.id || admin.email,
+        outcome: 'success',
+      });
+    }
+  } catch {
+    // Logout should always succeed from the client's point of view.
   }
+
+  return response;
 }

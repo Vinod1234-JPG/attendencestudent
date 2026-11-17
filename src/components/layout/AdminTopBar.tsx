@@ -2,17 +2,19 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Wifi, WifiOff, RefreshCw, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Wifi, WifiOff, AlertCircle, CheckCircle2, Menu } from 'lucide-react';
 import { getOfflineDb } from '@/lib/db/dexie';
 
 interface AdminTopBarProps {
   title?: string;
   eventName?: string;
+  onMenuClick?: () => void;
 }
 
 export function AdminTopBar({
   title = 'Overview',
-  eventName = 'MRF Research Retreat',
+  eventName = 'MIT Mysore Student Attendance',
+  onMenuClick,
 }: AdminTopBarProps) {
   const [isOnline, setIsOnline] = useState<boolean>(true);
   const [pendingCount, setPendingCount] = useState<number>(0);
@@ -68,12 +70,22 @@ export function AdminTopBar({
   }, []);
 
   return (
-    <header className="h-16 bg-white border-b border-[#E4E9F0] px-8 flex items-center justify-between shrink-0 shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
+    <header className="h-16 bg-white border-b border-[#E4E9F0] px-4 lg:px-8 flex items-center justify-between gap-3 shrink-0 shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
       {/* Title & Active Event */}
-      <div className="flex items-center gap-4">
-        <h2 className="text-xl font-bold text-[#182230]">{title}</h2>
-        <span className="text-[#CBD5E1]">|</span>
-        <div className="flex items-center gap-2">
+      <div className="flex items-center gap-3 lg:gap-4 min-w-0">
+        {onMenuClick && (
+          <button
+            type="button"
+            onClick={onMenuClick}
+            aria-label="Open menu"
+            className="lg:hidden -ml-1 w-10 h-10 flex items-center justify-center rounded-lg text-[#344054] hover:bg-[#F2F4F7]"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+        )}
+        <h2 className="text-lg lg:text-xl font-bold text-[#182230] truncate">{title}</h2>
+        <span className="text-[#CBD5E1] hidden md:inline">|</span>
+        <div className="hidden md:flex items-center gap-2">
           <span className="text-xs font-medium text-[#667085]">Active Event:</span>
           <span className="text-xs font-semibold text-[#142D4E] bg-[#EAF2FC] px-2.5 py-1 rounded border border-[#2864B4]/20">
             {activeEventName}
@@ -82,7 +94,7 @@ export function AdminTopBar({
       </div>
 
       {/* Status Indicators */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2 sm:gap-4 shrink-0">
         {/* Sync queue indicator */}
         <Link
           href="/admin/sync"
@@ -95,12 +107,12 @@ export function AdminTopBar({
           {pendingCount > 0 ? (
             <>
               <AlertCircle className="w-3.5 h-3.5 text-[#B7791F]" />
-              <span>{pendingCount} Pending Uploads</span>
+              <span>{pendingCount}<span className="hidden sm:inline"> Pending Uploads</span></span>
             </>
           ) : (
             <>
               <CheckCircle2 className="w-3.5 h-3.5 text-[#16835D]" />
-              <span>All Local Data Synced</span>
+              <span className="hidden sm:inline">All Local Data Synced</span>
             </>
           )}
         </Link>
@@ -117,13 +129,13 @@ export function AdminTopBar({
             <>
               <span className="w-2 h-2 rounded-full bg-[#16835D] animate-pulse"></span>
               <Wifi className="w-3.5 h-3.5" />
-              <span>Online</span>
+              <span className="hidden sm:inline">Online</span>
             </>
           ) : (
             <>
               <span className="w-2 h-2 rounded-full bg-[#C0393A]"></span>
               <WifiOff className="w-3.5 h-3.5" />
-              <span>Offline Mode</span>
+              <span className="hidden sm:inline">Offline Mode</span>
             </>
           )}
         </div>

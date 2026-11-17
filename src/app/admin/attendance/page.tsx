@@ -219,7 +219,7 @@ export default function AttendanceRecordsPage() {
             <Search className="w-4 h-4 absolute left-3 top-3 text-[#667085]" />
             <input
               type="text"
-              placeholder="Search by name, email, or PhD ID (instant filter)..."
+              placeholder="Search by student name or college (instant filter)..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-9 pr-9 py-2 bg-[#F7F9FC] border border-[#E4E9F0] rounded-lg text-xs text-[#182230] placeholder-[#667085] focus:outline-none focus:border-[#2864B4] focus:ring-1 focus:ring-[#2864B4]"
@@ -235,56 +235,6 @@ export default function AttendanceRecordsPage() {
             )}
           </form>
 
-          {/* Category Tabs */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-[#667085] font-medium mr-1 flex items-center gap-1">
-              <Filter className="w-3.5 h-3.5" /> Filter:
-            </span>
-            <div className="inline-flex p-1 bg-[#EEF1F5] rounded-lg border border-[#E4E9F0]">
-              <button
-                type="button"
-                onClick={() => {
-                  setCategory('');
-                  setPage(1);
-                }}
-                className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${
-                  category === ''
-                    ? 'bg-white text-[#142D4E] shadow-2xs'
-                    : 'text-[#667085] hover:text-[#182230]'
-                }`}
-              >
-                All
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setCategory('guide');
-                  setPage(1);
-                }}
-                className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${
-                  category === 'guide'
-                    ? 'bg-white text-[#142D4E] shadow-2xs'
-                    : 'text-[#667085] hover:text-[#182230]'
-                }`}
-              >
-                Guides
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setCategory('phd_scholar');
-                  setPage(1);
-                }}
-                className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${
-                  category === 'phd_scholar'
-                    ? 'bg-white text-[#142D4E] shadow-2xs'
-                    : 'text-[#667085] hover:text-[#182230]'
-                }`}
-              >
-                PhD Scholars
-              </button>
-            </div>
-          </div>
         </CardContent>
       </Card>
 
@@ -293,7 +243,7 @@ export default function AttendanceRecordsPage() {
         <CardHeader className="border-b border-[#E4E9F0] pb-3">
           <div className="flex items-center justify-between">
             <CardTitle className="text-sm font-bold text-[#142D4E]">
-              Confirmed Attendee Check-Ins ({totalCount})
+              Confirmed Student Check-Ins ({totalCount})
             </CardTitle>
             <div className="flex items-center gap-2 text-xs text-[#667085]">
               <ShieldCheck className="w-4 h-4 text-[#16835D]" />
@@ -307,9 +257,8 @@ export default function AttendanceRecordsPage() {
               <thead>
                 <tr className="border-b border-[#E4E9F0] bg-[#F7F9FC] text-[#667085] font-semibold">
                   <th className="px-6 py-3 w-16">Photo</th>
-                  <th className="px-6 py-3">Attendee Name</th>
-                  <th className="px-6 py-3">Category</th>
-                  <th className="px-6 py-3">Email Address / PhD ID</th>
+                  <th className="px-6 py-3">Student Name</th>
+                  <th className="px-6 py-3">College</th>
                   <th className="px-6 py-3">Check-In Time</th>
                   <th className="px-6 py-3">Status</th>
                   <th className="px-6 py-3 text-right">Actions</th>
@@ -318,14 +267,14 @@ export default function AttendanceRecordsPage() {
               <tbody className="divide-y divide-[#E4E9F0]">
                 {isLoading ? (
                   <tr>
-                    <td colSpan={7} className="px-6 py-8 text-center text-[#667085]">
+                    <td colSpan={6} className="px-6 py-8 text-center text-[#667085]">
                       <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-[#2864B4]" />
                       Loading verified records...
                     </td>
                   </tr>
                 ) : records.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-6 py-8 text-center text-[#667085]">
+                    <td colSpan={6} className="px-6 py-8 text-center text-[#667085]">
                       No attendance check-ins found matching your search.
                     </td>
                   </tr>
@@ -358,36 +307,9 @@ export default function AttendanceRecordsPage() {
                         {r.attendee.name}
                       </td>
 
-                      {/* Category */}
-                      <td className="px-6 py-3">
-                        <Badge variant="blue">
-                          {r.attendee.category === 'guide' ? 'Guide' : 'PhD Scholar'}
-                        </Badge>
-                      </td>
-
-                      {/* Email Address & PhD ID */}
+                      {/* College */}
                       <td className="px-6 py-3 text-[#182230]">
-                        <div className="space-y-0.5">
-                          {r.attendee.category === 'guide' ? (
-                            <div className="flex items-center gap-1.5 font-medium text-[#142D4E]">
-                              <Mail className="w-3.5 h-3.5 text-[#2864B4] shrink-0" />
-                              <span>{r.attendee.email || r.attendee.identifier || '—'}</span>
-                            </div>
-                          ) : (
-                            <div className="space-y-0.5">
-                              <div className="flex items-center gap-1.5 font-mono font-semibold text-[#142D4E]">
-                                <Award className="w-3.5 h-3.5 text-[#E65100] shrink-0" />
-                                <span>ID: {r.attendee.phd_id || r.attendee.identifier}</span>
-                              </div>
-                              {r.attendee.email && (
-                                <div className="flex items-center gap-1 text-[11px] text-[#667085]">
-                                  <Mail className="w-3 h-3 text-[#667085] shrink-0" />
-                                  <span>{r.attendee.email}</span>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
+                        {r.attendee.college || r.attendee.identifier || '—'}
                       </td>
 
                       {/* Time */}
@@ -496,31 +418,15 @@ export default function AttendanceRecordsPage() {
             {/* Details Grid */}
             <div className="bg-[#F7F9FC] border border-[#E4E9F0] rounded-xl p-4 space-y-3 text-xs">
               <div className="flex justify-between border-b border-[#E4E9F0] pb-2">
-                <span className="text-[#667085]">Full Name:</span>
+                <span className="text-[#667085]">Student Name:</span>
                 <span className="font-bold text-[#182230]">{selectedRecord.attendee.name}</span>
               </div>
               <div className="flex justify-between border-b border-[#E4E9F0] pb-2">
-                <span className="text-[#667085]">Attendee Category:</span>
-                <span className="font-semibold text-[#142D4E] capitalize">
-                  {selectedRecord.attendee.category === 'guide' ? 'Guide' : 'PhD Scholar'}
+                <span className="text-[#667085]">College Name:</span>
+                <span className="font-semibold text-[#182230]">
+                  {selectedRecord.attendee.college || selectedRecord.attendee.identifier || '—'}
                 </span>
               </div>
-              <div className="flex justify-between border-b border-[#E4E9F0] pb-2">
-                <span className="text-[#667085]">
-                  {selectedRecord.attendee.category === 'guide' ? 'Registered Email:' : 'PhD ID:'}
-                </span>
-                <span className="font-mono font-semibold text-[#182230]">
-                  {selectedRecord.attendee.category === 'guide'
-                    ? (selectedRecord.attendee.email || selectedRecord.attendee.identifier)
-                    : (selectedRecord.attendee.phd_id || selectedRecord.attendee.identifier)}
-                </span>
-              </div>
-              {selectedRecord.attendee.category === 'phd_scholar' && selectedRecord.attendee.email && (
-                <div className="flex justify-between border-b border-[#E4E9F0] pb-2">
-                  <span className="text-[#667085]">Scholar Email:</span>
-                  <span className="font-medium text-[#182230]">{selectedRecord.attendee.email}</span>
-                </div>
-              )}
               <div className="flex justify-between border-b border-[#E4E9F0] pb-2">
                 <span className="text-[#667085]">Device Capture Timestamp:</span>
                 <span className="font-mono text-[#182230]">
@@ -543,7 +449,7 @@ export default function AttendanceRecordsPage() {
                 Object.keys(selectedRecord.attendee.extra_details).length > 0 && (
                   <div className="border-b border-[#E4E9F0] pb-2 pt-1 space-y-1.5">
                     <span className="text-[11px] font-bold text-[#142D4E] block uppercase tracking-wider">
-                      Additional Uploaded Details:
+                      Additional Details:
                     </span>
                     {Object.entries(selectedRecord.attendee.extra_details).map(([k, v]) => (
                       <div key={k} className="flex justify-between text-xs">
@@ -603,26 +509,20 @@ export default function AttendanceRecordsPage() {
                   This will delete the attendance log, capture timestamp, and verified photograph.
                 </p>
                 <p className="text-[#16835D] font-semibold">
-                  ✓ Safe Action: The registered person will NOT be deleted. Their enrollment and profile data remain completely safe in the database and their status will revert to &ldquo;Not Attended / Pending&rdquo;.
+                  ✓ Safe Action: The student will NOT be deleted. Their registration remains completely safe in the database and their status will revert to &ldquo;Not Attended / Pending&rdquo;.
                 </p>
               </div>
             </div>
 
             <div className="p-3 bg-[#F7F9FC] border border-[#E4E9F0] rounded-lg text-xs space-y-1.5">
               <div className="flex justify-between">
-                <span className="text-[#667085]">Attendee Name:</span>
+                <span className="text-[#667085]">Student Name:</span>
                 <span className="font-bold text-[#142D4E]">{recordToDelete.attendee.name}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-[#667085]">Category:</span>
-                <span className="capitalize font-semibold text-[#182230]">
-                  {recordToDelete.attendee.category === 'guide' ? 'Research Guide' : 'PhD Scholar'}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-[#667085]">Identifier:</span>
-                <span className="font-mono text-[#182230]">
-                  {recordToDelete.attendee.identifier || recordToDelete.attendee.email || recordToDelete.attendee.phd_id}
+                <span className="text-[#667085]">College:</span>
+                <span className="text-[#182230]">
+                  {recordToDelete.attendee.college || recordToDelete.attendee.identifier || '—'}
                 </span>
               </div>
               <div className="flex justify-between">

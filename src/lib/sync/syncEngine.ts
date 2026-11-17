@@ -106,6 +106,8 @@ class SyncEngine {
           formData.append('person_id', item.person_id);
           formData.append('category', item.category);
           formData.append('identifier', item.identifier);
+          formData.append('attendee_name', item.person_name);
+          formData.append('college', item.college || item.identifier);
           formData.append('captured_at_device', item.captured_at_device);
           formData.append('photo', item.photo_blob, `${item.operation_id}.jpg`);
 

@@ -3,12 +3,16 @@ import { unstable_noStore as noStore } from 'next/cache';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { recordAuditLog } from '@/lib/utils/audit';
 import { getDevStorage } from '@/lib/db/devStore';
+import { requireAdmin } from '@/lib/auth/requireAdmin';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 export const fetchCache = 'force-no-store';
 
 export async function GET() {
+  const auth = await requireAdmin();
+  if (auth.response) return auth.response;
+
   noStore();
   try {
     const isPlaceholder =
@@ -57,10 +61,13 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const auth = await requireAdmin();
+  if (auth.response) return auth.response;
+
   noStore();
   try {
     const body = await request.json().catch(() => ({}));
-    if (!body || (!body.confirm && body.confirm !== 'PURGE_ALL_DATA')) {
+    if (!body || body.confirm !== 'PURGE_ALL_DATA') {
       return NextResponse.json(
         { error: 'Confirmation required. Pass { "confirm": "PURGE_ALL_DATA" } to proceed.' },
         { status: 400 }
