@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Landmark } from 'lucide-react';
+import { BadgeCheck, GraduationCap } from 'lucide-react';
 
 interface Registration {
   attendeeId: string;
@@ -17,11 +17,124 @@ const time = (r: Registration) => {
   return Number.isNaN(t) ? Number.POSITIVE_INFINITY : t;
 };
 
-// Font sizes (in vw) that shrink for long text so it stays within two lines.
-const nameSize = (len: number) => Math.max(2.2, Math.min(7, 135 / Math.max(len, 1)));
-const collegeSize = (len: number) => Math.max(1.4, Math.min(2.6, 100 / Math.max(len, 1)));
+// Font sizes (in cqw: percent of the 16:9 stage width) that shrink for long text so it stays within two lines.
+const nameSize = (len: number) => Math.max(2.4, Math.min(6.4, 118 / Math.max(len, 1)));
+const collegeSize = (len: number) => Math.max(1.5, Math.min(2.8, 90 / Math.max(len, 1)));
 
-/** Cinematic backdrop: aurora glows, a perspective grid floor and slow floating orbs. */
+const GOLD = '#F5A524';
+const GOLD_LIGHT = '#FFD76A';
+
+/** Stylised night-time campus illustration (decorative). */
+function Campus() {
+  const stars = Array.from({ length: 34 }, (_, i) => ({
+    x: (i * 137) % 790 + 5,
+    y: ((i * 61) % 330) + 10,
+    r: 0.8 + ((i * 7) % 4) * 0.45,
+    o: 0.35 + ((i * 13) % 6) * 0.1,
+  }));
+  const windows: { x: number; y: number; on: boolean }[] = [];
+  for (let row = 0; row < 4; row++) {
+    for (let col = 0; col < 9; col++) {
+      if (col >= 4 && col <= 4) continue; // leave the central tower clear
+      windows.push({ x: 150 + col * 55, y: 470 + row * 68, on: (row * 7 + col * 3) % 5 !== 0 });
+    }
+  }
+  const towerWindows: { x: number; y: number; on: boolean }[] = [];
+  for (let row = 0; row < 5; row++) {
+    for (let col = 0; col < 2; col++) {
+      towerWindows.push({ x: 355 + col * 55, y: 335 + row * 68, on: (row + col) % 3 !== 0 });
+    }
+  }
+  const trees = [
+    { x: 700, y: 640, s: 1.25 },
+    { x: 770, y: 700, s: 1.5 },
+    { x: 620, y: 700, s: 0.9 },
+    { x: 40, y: 700, s: 1.1 },
+  ];
+
+  return (
+    <svg
+      viewBox="0 0 800 900"
+      preserveAspectRatio="xMidYMax slice"
+      className="absolute inset-0 h-full w-full"
+      aria-hidden
+    >
+      <defs>
+        <linearGradient id="cSky" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#081a44" />
+          <stop offset="0.55" stopColor="#12337a" />
+          <stop offset="1" stopColor="#0a1a3d" />
+        </linearGradient>
+        <linearGradient id="cWall" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#33497f" />
+          <stop offset="1" stopColor="#17264d" />
+        </linearGradient>
+        <linearGradient id="cGround" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#0d1b3b" />
+          <stop offset="1" stopColor="#050a18" />
+        </linearGradient>
+        <radialGradient id="cMoon" cx="0.5" cy="0.5" r="0.5">
+          <stop offset="0" stopColor="#fff8dc" />
+          <stop offset="0.45" stopColor="#fde68a" stopOpacity="0.85" />
+          <stop offset="1" stopColor="#fde68a" stopOpacity="0" />
+        </radialGradient>
+        <radialGradient id="cGlow" cx="0.5" cy="1" r="0.8">
+          <stop offset="0" stopColor="#fbbf24" stopOpacity="0.45" />
+          <stop offset="1" stopColor="#fbbf24" stopOpacity="0" />
+        </radialGradient>
+      </defs>
+
+      <rect width="800" height="900" fill="url(#cSky)" />
+      {stars.map((s, i) => (
+        <circle key={i} cx={s.x} cy={s.y} r={s.r} fill="#dbeafe" opacity={s.o} />
+      ))}
+      <circle cx="610" cy="150" r="120" fill="url(#cMoon)" opacity="0.55" />
+      <circle cx="610" cy="150" r="30" fill="#fff4c4" />
+
+      {/* warm glow behind the building */}
+      <ellipse cx="400" cy="770" rx="420" ry="220" fill="url(#cGlow)" />
+
+      {/* building */}
+      <rect x="60" y="520" width="110" height="250" fill="url(#cWall)" />
+      <rect x="630" y="520" width="110" height="250" fill="url(#cWall)" />
+      <rect x="140" y="440" width="520" height="330" fill="url(#cWall)" />
+      <rect x="320" y="300" width="160" height="470" fill="url(#cWall)" />
+      <polygon points="308,300 400,236 492,300" fill="#3a5290" />
+      <rect x="130" y="428" width="540" height="16" fill="#3f5a9c" />
+      <rect x="50" y="508" width="130" height="14" fill="#3f5a9c" />
+      <rect x="620" y="508" width="130" height="14" fill="#3f5a9c" />
+      <line x1="400" y1="236" x2="400" y2="170" stroke="#8aa4d6" strokeWidth="3" />
+      <polygon points="402,172 452,186 402,200" fill={GOLD} opacity="0.9" />
+
+      {windows.map((w, i) => (
+        <rect key={i} x={w.x} y={w.y} width="28" height="42" rx="3" fill={w.on ? '#fde68a' : '#223863'} opacity={w.on ? 0.85 : 0.9} />
+      ))}
+      {towerWindows.map((w, i) => (
+        <rect key={`t${i}`} x={w.x} y={w.y} width="32" height="44" rx="3" fill={w.on ? '#fde68a' : '#223863'} opacity={w.on ? 0.9 : 0.9} />
+      ))}
+      {[0, 1, 2, 3, 4].map((i) => (
+        <rect key={`c${i}`} x={338 + i * 30} y="690" width="14" height="80" fill="#8aa4d6" opacity="0.7" />
+      ))}
+      <path d="M368 770 v-52 a32 32 0 0 1 64 0 v52 z" fill="#fde68a" opacity="0.9" />
+
+      {/* ground and path */}
+      <rect x="0" y="770" width="800" height="130" fill="url(#cGround)" />
+      <polygon points="372,770 428,770 560,900 240,900" fill="#16254a" opacity="0.9" />
+
+      {/* trees */}
+      {trees.map((t, i) => (
+        <g key={i} transform={`translate(${t.x} ${t.y}) scale(${t.s})`}>
+          <rect x="-5" y="40" width="10" height="70" fill="#050c1d" />
+          <circle cx="0" cy="10" r="48" fill="#071428" />
+          <circle cx="-30" cy="34" r="34" fill="#061126" />
+          <circle cx="30" cy="30" r="38" fill="#08162c" />
+        </g>
+      ))}
+    </svg>
+  );
+}
+
+/** Cinematic backdrop: navy base, gold and blue glows, campus on the right, light streaks. */
 function Backdrop() {
   return (
     <div className="absolute inset-0 overflow-hidden" aria-hidden>
@@ -29,112 +142,163 @@ function Backdrop() {
         className="absolute inset-0"
         style={{
           background: [
-            'radial-gradient(60vw 62vh at 0% 0%, rgba(20,184,166,0.50), transparent 62%)',
-            'radial-gradient(72vw 72vh at 100% 28%, rgba(37,99,235,0.55), transparent 62%)',
-            'radial-gradient(64vw 50vh at 58% 112%, rgba(124,58,237,0.50), transparent 62%)',
-            'linear-gradient(160deg, #040A18 0%, #0A1A3F 52%, #050F26 100%)',
+            'radial-gradient(60vw 80vh at 20% 58%, rgba(245,165,36,0.20), transparent 62%)',
+            'radial-gradient(60vw 70vh at 90% 25%, rgba(37,99,235,0.30), transparent 62%)',
+            'linear-gradient(135deg, #03060E 0%, #07122A 55%, #050B1C 100%)',
           ].join(','),
         }}
       />
 
-      {/* perspective grid floor */}
+      {/* campus, faded into the dark on its left edge */}
       <div
-        className="absolute inset-x-[-30vw] bottom-0 h-[46vh] live-grid"
+        className="absolute inset-y-0 right-0 w-[52vw] opacity-90"
         style={{
-          backgroundImage:
-            'linear-gradient(rgba(125,211,252,0.22) 1px, transparent 1px), linear-gradient(90deg, rgba(125,211,252,0.22) 1px, transparent 1px)',
-          backgroundSize: '5vw 6vh',
-          transform: 'perspective(48vh) rotateX(64deg)',
-          transformOrigin: '50% 100%',
-          WebkitMaskImage: 'linear-gradient(to top, #000 15%, transparent 95%)',
-          maskImage: 'linear-gradient(to top, #000 15%, transparent 95%)',
+          WebkitMaskImage: 'linear-gradient(to right, transparent 0%, #000 42%)',
+          maskImage: 'linear-gradient(to right, transparent 0%, #000 42%)',
         }}
-      />
+      >
+        <Campus />
+      </div>
+      <div className="absolute inset-0" style={{ background: 'linear-gradient(90deg, rgba(3,6,14,0.55) 0%, rgba(3,6,14,0.0) 55%)' }} />
 
-      {/* floating orbs */}
-      <div className="live-orb absolute left-[41vw] top-[19vh] h-[6.4vw] w-[6.4vw] rounded-full" style={{ background: 'radial-gradient(circle at 32% 28%, #bae6fd, #2563eb 48%, #0b1e5a 100%)', animationDelay: '0s' }} />
-      <div className="live-orb absolute left-[3.5vw] bottom-[9vh] h-[11vw] w-[11vw] rounded-full" style={{ background: 'radial-gradient(circle at 32% 28%, #7dd3fc, #0e7490 46%, #052a4a 100%)', animationDelay: '-3s' }} />
-      <div className="live-orb absolute right-[6vw] bottom-[8vh] h-[7vw] w-[7vw] rounded-full" style={{ background: 'radial-gradient(circle at 32% 28%, #ddd6fe, #7c3aed 50%, #2e1065 100%)', animationDelay: '-5s' }} />
+      {/* light streaks, top right */}
+      <div className="live-streak absolute right-[3vw] top-[5vh] h-[0.55vh] w-[14vw] -skew-x-[32deg] rounded-full bg-gradient-to-r from-transparent via-sky-400/70 to-sky-300" />
+      <div className="live-streak absolute right-[9vw] top-[9vh] h-[0.4vh] w-[9vw] -skew-x-[32deg] rounded-full bg-gradient-to-r from-transparent via-sky-500/60 to-sky-300/90" style={{ animationDelay: '-2s' }} />
+      <div className="live-streak absolute right-[1vw] top-[12vh] h-[0.35vh] w-[7vw] -skew-x-[32deg] rounded-full bg-gradient-to-r from-transparent to-blue-300/80" style={{ animationDelay: '-4s' }} />
 
-      {/* film grain / scan lines */}
+      {/* fine scan lines + vignette */}
       <div
-        className="absolute inset-0 opacity-[0.07] mix-blend-overlay"
+        className="absolute inset-0 opacity-[0.05] mix-blend-overlay"
         style={{ backgroundImage: 'repeating-linear-gradient(0deg, #fff 0, #fff 1px, transparent 1px, transparent 3px)' }}
       />
-      <div className="absolute inset-0" style={{ boxShadow: 'inset 0 0 14vw rgba(2,6,23,0.65)' }} />
+      <div className="absolute inset-0" style={{ boxShadow: 'inset 0 0 12vw rgba(1,3,10,0.8)' }} />
+    </div>
+  );
+}
+
+/** The MIT lock-up shown top-left on every screen. */
+function Brand() {
+  return (
+    <div className="absolute left-[3cqw] top-[3.6cqh] z-10 flex items-center gap-[1.2cqw]">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/logo.jpg"
+        alt="MIT Mysore"
+        className="aspect-square h-[max(9cqh,56px)] rounded-full bg-white object-contain p-[3px] shadow-[0_0_2.4vw_rgba(245,165,36,0.45)] ring-[0.25cqw] ring-amber-400/80"
+      />
+      <span className="h-[7.5cqh] w-[0.14cqw] rounded-full bg-gradient-to-b from-transparent via-amber-400 to-transparent" />
+      <div className="leading-tight">
+        <div className="font-extrabold tracking-tight text-white" style={{ fontSize: 'max(3.6cqh, 18px)' }}>
+          MIT Mysore
+        </div>
+        <div className="font-medium text-slate-200/90" style={{ fontSize: 'max(2.6cqh, 13px)' }}>
+          Student Attendance Tracker
+        </div>
+      </div>
     </div>
   );
 }
 
 function Slide({ reg, className }: { reg: Registration; className: string }) {
+  const S = 'min(54cqh, 31cqw)'; // diameter of the photo circle
   return (
-    <div className={`absolute inset-0 flex items-center gap-[5.5vw] px-[5.5vw] ${className}`}>
-      {/* Photo: tilted glass frame with a glowing gradient edge, orbit ring and reflection */}
-      <div className="relative shrink-0" style={{ perspective: '120vh' }}>
-        <div className="live-orbit absolute -right-[5.5vw] bottom-[-1vh] h-[7vw] w-[17vw]" aria-hidden />
+    <div className={`absolute inset-0 flex items-center gap-[7cqw] pl-[8cqw] pr-[4cqw] pt-[8cqh] ${className}`}>
+      {/* Photo: golden concentric rings */}
+      <div className="relative shrink-0 live-scale-in" style={{ width: S, height: S }}>
         <div
-          className="live-frame-in relative"
+          className="live-spin-slow absolute rounded-full"
+          style={{ inset: '-17%', border: '0.13cqw dashed rgba(245,165,36,0.5)' }}
+          aria-hidden
+        />
+        <div
+          className="live-spin-rev absolute rounded-full"
           style={{
-            transform: 'rotateY(-7deg) rotateX(2deg) rotateZ(-1deg)',
-            WebkitBoxReflect: 'below 1.2vh linear-gradient(transparent 72%, rgba(255,255,255,0.16))',
+            inset: '-10%',
+            background: `conic-gradient(from 30deg, ${GOLD_LIGHT} 0 22%, transparent 22% 38%, ${GOLD} 38% 66%, transparent 66% 82%, ${GOLD_LIGHT} 82% 100%)`,
+            WebkitMask: 'radial-gradient(farthest-side, transparent calc(100% - 0.45cqw), #000 calc(100% - 0.45cqw))',
+            mask: 'radial-gradient(farthest-side, transparent calc(100% - 0.45cqw), #000 calc(100% - 0.45cqw))',
+            filter: 'drop-shadow(0 0 1cqw rgba(245,165,36,0.7))',
           }}
+          aria-hidden
+        />
+        <div
+          className="live-ring-glow absolute rounded-full"
+          style={{
+            inset: '-4%',
+            background: `linear-gradient(135deg, ${GOLD_LIGHT}, ${GOLD} 45%, #B45309 75%, ${GOLD_LIGHT})`,
+            WebkitMask: 'radial-gradient(farthest-side, transparent calc(100% - 0.6cqw), #000 calc(100% - 0.6cqw))',
+            mask: 'radial-gradient(farthest-side, transparent calc(100% - 0.6cqw), #000 calc(100% - 0.6cqw))',
+          }}
+          aria-hidden
+        />
+        <div className="absolute inset-0 overflow-hidden rounded-full border-[0.3cqw] border-[#0a1226] bg-[#0B1B30] shadow-[0_0_4vw_rgba(0,0,0,0.6)]">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={reg.photoUrl}
+            alt={reg.name}
+            className="h-full w-full object-cover"
+            style={{ objectPosition: 'center 35%' }}
+          />
+          <div className="pointer-events-none absolute inset-0 rounded-full bg-gradient-to-br from-white/15 via-transparent to-black/25" />
+        </div>
+
+        {/* Student badge */}
+        <div
+          className="live-pop absolute left-1/2 z-10 flex -translate-x-1/2 items-center gap-[0.7cqw] rounded-full border border-amber-400/80 bg-[#0a1226] px-[1.5cqw] py-[1.1cqh] shadow-[0_0_2vw_rgba(245,165,36,0.35)]"
+          style={{ bottom: '-4.2%', animationDelay: '0.5s' }}
         >
-          <div
-            className="live-glow rounded-[2.4vw] p-[0.42vw]"
-            style={{
-              background: 'linear-gradient(135deg, #a78bfa 0%, #22d3ee 48%, #34d399 100%)',
-            }}
-          >
-            <div className="relative h-[64vh] w-[31vw] overflow-hidden rounded-[2vw] bg-[#0B1B30]">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={reg.photoUrl}
-                alt={reg.name}
-                className="h-full w-full object-cover"
-                style={{ objectPosition: 'center 35%' }}
-              />
-              <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-black/20" />
-              <div className="live-sweep pointer-events-none absolute inset-y-0 -left-1/2 w-1/2 bg-gradient-to-r from-transparent via-white/30 to-transparent" />
-            </div>
-          </div>
+          <GraduationCap className="h-[2.6cqh] w-[2.6cqh] text-amber-400" strokeWidth={2} />
+          <span className="font-bold tracking-wide text-white" style={{ fontSize: 'max(2.3cqh, 12px)' }}>
+            Student
+          </span>
         </div>
       </div>
 
-      {/* Name + college */}
+      {/* Name, college, tagline */}
       <div className="min-w-0 flex-1">
         <h1
-          className="live-rise pb-[0.14em] font-extrabold leading-[1.1] tracking-tight line-clamp-2 break-words"
+          className="live-rise pb-[0.12em] font-extrabold leading-[1.1] tracking-tight text-white line-clamp-2 break-words"
           style={{
-            fontSize: `${nameSize(reg.name.length)}vw`,
-            backgroundImage: 'linear-gradient(180deg, #ffffff 35%, #b9d3ff 100%)',
-            WebkitBackgroundClip: 'text',
-            backgroundClip: 'text',
-            color: 'transparent',
-            filter: 'drop-shadow(0 0 1.6vw rgba(96,165,250,0.45))',
-            animationDelay: '0.15s',
+            fontSize: `${nameSize(reg.name.length)}cqw`,
+            textShadow: '0 0 2.4cqw rgba(245,165,36,0.28)',
+            animationDelay: '0.2s',
           }}
         >
           {reg.name}
+          <BadgeCheck
+            className="ml-[0.22em] inline-block align-[-0.1em]"
+            style={{ width: '0.78em', height: '0.78em' }}
+            fill={GOLD}
+            stroke="#FFF7E0"
+            strokeWidth={1.6}
+          />
         </h1>
 
-        <div className="live-grow mt-[3vh] h-[0.9vh] w-[11vw] rounded-full bg-gradient-to-r from-teal-300 via-sky-400 to-violet-400" style={{ animationDelay: '0.45s' }} />
+        <div className="live-grow my-[3cqh] h-[0.25cqh] w-full max-w-[34cqw] bg-gradient-to-r from-amber-400 via-amber-400/40 to-transparent" style={{ animationDelay: '0.4s' }} />
 
         {reg.college && (
-          <div
-            className="live-rise mt-[4vh] inline-flex max-w-full items-center gap-[1.3vw] rounded-[1.5vw] border border-white/15 bg-white/10 px-[1.3vw] py-[1.6vh] shadow-[0_1vh_4vh_rgba(2,6,23,0.35)] backdrop-blur-xl"
-            style={{ animationDelay: '0.6s' }}
-          >
-            <span className="flex h-[4.2vw] w-[4.2vw] shrink-0 items-center justify-center rounded-[1.1vw] bg-gradient-to-br from-sky-400 to-teal-400 shadow-[0_0_2vw_rgba(56,189,248,0.55)]">
-              <Landmark className="h-[2.2vw] w-[2.2vw] text-white" strokeWidth={1.8} />
-            </span>
+          <div className="live-rise flex items-center gap-[1.3cqw]" style={{ animationDelay: '0.55s' }}>
+            <GraduationCap
+              className="shrink-0 text-amber-400"
+              style={{ width: `${Math.max(2, collegeSize(reg.college.length) * 1.5)}cqw`, height: `${Math.max(2, collegeSize(reg.college.length) * 1.5)}cqw` }}
+              strokeWidth={1.8}
+            />
             <span
-              className="min-w-0 font-semibold leading-snug text-white/90 line-clamp-2 break-words"
-              style={{ fontSize: `${collegeSize(reg.college.length)}vw` }}
+              className="min-w-0 font-semibold leading-snug text-white line-clamp-2 break-words"
+              style={{ fontSize: `${collegeSize(reg.college.length)}cqw` }}
             >
               {reg.college}
             </span>
           </div>
         )}
+
+        <div className="live-rise mt-[5cqh] flex items-center gap-[1cqw] italic text-slate-200/80" style={{ fontSize: 'max(2.6cqh, 14px)', animationDelay: '0.7s' }}>
+          <span>Learn</span>
+          <span className="text-amber-400">•</span>
+          <span>Grow</span>
+          <span className="text-amber-400">•</span>
+          <span>Excel</span>
+        </div>
       </div>
     </div>
   );
@@ -284,92 +448,80 @@ export default function LiveDisplayPage() {
     <div
       onClick={() => !document.fullscreenElement && toggleFullscreen()}
       onMouseMove={onMouseMove}
-      className={`fixed inset-0 z-[100] overflow-hidden bg-[#040A18] text-white select-none ${
+      className={`fixed inset-0 z-[100] overflow-hidden bg-[#03060E] text-white select-none ${
         moving ? '' : 'cursor-none'
       }`}
     >
       <Backdrop />
 
-      {/* Top bar: glass pill */}
-      <header className="absolute inset-x-[2.5vw] top-[2.4vh] z-10 flex h-[max(8vh,52px)] items-center gap-[1.2vw] rounded-[1.4vw] border border-white/15 bg-white/10 px-[1.4vw] shadow-[0_1vh_5vh_rgba(2,6,23,0.4)] backdrop-blur-xl">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/logo.jpg"
-          alt="MIT Mysore"
-          className="aspect-square h-[max(5.4vh,34px)] rounded-full bg-white object-contain p-[2px] ring-2 ring-sky-300/70"
-        />
-        <span className="font-bold tracking-wide text-white" style={{ fontSize: 'max(2.6vh, 14px)' }}>
-          MIT Mysore Student Attendance Tracker
-        </span>
-        <Link
-          href="/admin"
-          onClick={(e) => e.stopPropagation()}
-          className={`ml-auto rounded-full bg-white/15 px-[1.2vw] py-[0.8vh] text-white/90 transition-opacity duration-300 hover:bg-white/25 ${
-            moving ? 'opacity-100' : 'pointer-events-none opacity-0'
-          }`}
-          style={{ fontSize: 'max(1.9vh, 12px)' }}
-        >
-          ← Dashboard
-        </Link>
-      </header>
+      {/* 16:9 stage: the biggest 16:9 box that fits the screen; everything inside is sized in cqw/cqh */}
+      <div
+        className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
+        style={{ width: 'min(100vw, 177.78vh)', height: 'min(100vh, 56.25vw)', containerType: 'size' }}
+      >
+      <Brand />
 
-      {/* Stage */}
-      <div className="absolute inset-x-0 bottom-0 top-[calc(2.4vh+max(8vh,52px))]">
+      <Link
+        href="/admin"
+        onClick={(e) => e.stopPropagation()}
+        className={`absolute right-[2vw] top-[2.4vh] z-20 rounded-full border border-white/15 bg-white/10 px-[1.2vw] py-[0.8vh] text-white/90 backdrop-blur transition-opacity duration-300 hover:bg-white/20 ${
+          moving ? 'opacity-100' : 'pointer-events-none opacity-0'
+        }`}
+        style={{ fontSize: 'max(1.9vh, 12px)' }}
+      >
+        ← Dashboard
+      </Link>
+
+      <div className="absolute inset-0">
         {previous && <Slide key={`prev-${slideKey}`} reg={previous} className="live-fade-out" />}
         {current ? (
           <Slide key={`cur-${slideKey}`} reg={current} className={previous ? 'live-fade-in' : ''} />
         ) : (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-[3vh]">
-            <div className="live-pulse-ring h-[9vh] w-[9vh] rounded-full border-[0.5vh] border-sky-300/70" />
-            <p className="font-semibold text-white/80" style={{ fontSize: 'max(3.4vh, 18px)' }}>
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-[3cqh]">
+            <div className="live-pulse-ring h-[9cqh] w-[9cqh] rounded-full border-[0.5cqh] border-amber-400/70" />
+            <p className="font-semibold text-white/85" style={{ fontSize: 'max(3.4cqh, 18px)' }}>
               Waiting for registration…
             </p>
           </div>
         )}
       </div>
+      </div>
 
       <style jsx global>{`
         @keyframes liveFadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes liveFadeOut { from { opacity: 1; } to { opacity: 0; } }
-        @keyframes liveFrameIn {
-          from { opacity: 0; transform: translateX(-9vw) rotateY(-30deg) rotateX(2deg) scale(0.92); }
-          to { opacity: 1; transform: rotateY(-7deg) rotateX(2deg) rotateZ(-1deg) scale(1); }
-        }
+        @keyframes liveScaleIn { from { opacity: 0; transform: scale(0.82); } to { opacity: 1; transform: scale(1); } }
         @keyframes liveRise {
-          from { opacity: 0; transform: translateY(3.5vh); filter: blur(8px); }
+          from { opacity: 0; transform: translateY(3vh); filter: blur(8px); }
           to { opacity: 1; transform: translateY(0); filter: blur(0); }
         }
+        @keyframes livePop { 0% { opacity: 0; transform: translateX(-50%) scale(0.6); } 70% { transform: translateX(-50%) scale(1.08); } 100% { opacity: 1; transform: translateX(-50%) scale(1); } }
         @keyframes liveGrow { from { transform: scaleX(0); opacity: 0; } to { transform: scaleX(1); opacity: 1; } }
-        @keyframes liveFloat { from { transform: translateY(0) scale(1); } to { transform: translateY(-3vh) scale(1.04); } }
-        @keyframes liveSweep { from { transform: translateX(0); } to { transform: translateX(420%); } }
-        @keyframes liveGlow {
-          0%, 100% { box-shadow: 0 0 5vw rgba(56,189,248,0.40), 0 3vh 8vh rgba(2,6,23,0.55); }
-          50% { box-shadow: 0 0 8vw rgba(139,92,246,0.55), 0 3vh 8vh rgba(2,6,23,0.55); }
+        @keyframes liveSpin { to { transform: rotate(360deg); } }
+        @keyframes liveRingGlow {
+          0%, 100% { filter: drop-shadow(0 0 1.4vw rgba(245,165,36,0.55)); }
+          50% { filter: drop-shadow(0 0 2.6vw rgba(255,215,106,0.85)); }
         }
-        @keyframes liveOrbit { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes liveStreak { 0% { transform: translateX(6vw) skewX(-32deg); opacity: 0; } 25% { opacity: 1; } 100% { transform: translateX(-4vw) skewX(-32deg); opacity: 0; } }
         @keyframes livePulse { 0% { transform: scale(0.85); opacity: 0.9; } 100% { transform: scale(1.7); opacity: 0; } }
 
         .live-fade-in { animation: liveFadeIn 400ms ease forwards; }
         .live-fade-out { animation: liveFadeOut 400ms ease forwards; }
-        .live-frame-in { animation: liveFrameIn 900ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+        .live-scale-in { animation: liveScaleIn 800ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
         .live-rise { opacity: 0; animation: liveRise 700ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+        .live-pop { opacity: 0; animation: livePop 600ms cubic-bezier(0.2, 0.9, 0.3, 1) forwards; }
         .live-grow { transform-origin: left center; opacity: 0; animation: liveGrow 700ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
-        .live-orb { animation: liveFloat 9s ease-in-out infinite alternate; box-shadow: 0 0 4vw rgba(56,189,248,0.25); }
-        .live-sweep { animation: liveSweep 1400ms ease 600ms 1 both; }
-        .live-glow { animation: liveGlow 5s ease-in-out infinite; }
-        .live-orbit {
-          border-radius: 9999px;
-          background: conic-gradient(from 200deg, #a78bfa, #22d3ee, #34d399, #a78bfa);
-          -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 0.7vw), #000 calc(100% - 0.7vw));
-          mask: radial-gradient(farthest-side, transparent calc(100% - 0.7vw), #000 calc(100% - 0.7vw));
-          filter: drop-shadow(0 0 1.2vw rgba(139, 92, 246, 0.6));
-          opacity: 0.9;
-        }
+        .live-spin-slow { animation: liveSpin 60s linear infinite; }
+        .live-spin-rev { animation: liveSpin 24s linear infinite reverse; }
+        .live-ring-glow { animation: liveRingGlow 4s ease-in-out infinite; }
+        .live-streak { animation: liveStreak 6s ease-in-out infinite; }
         .live-pulse-ring { animation: livePulse 2s ease-out infinite; }
 
         @media (prefers-reduced-motion: reduce) {
-          .live-fade-in, .live-fade-out, .live-frame-in, .live-rise, .live-grow, .live-orb,
-          .live-sweep, .live-glow, .live-pulse-ring { animation-duration: 1ms; animation-iteration-count: 1; }
+          .live-fade-in, .live-fade-out, .live-scale-in, .live-rise, .live-pop, .live-grow,
+          .live-spin-slow, .live-spin-rev, .live-ring-glow, .live-streak, .live-pulse-ring {
+            animation-duration: 1ms; animation-iteration-count: 1;
+          }
         }
       `}</style>
     </div>
