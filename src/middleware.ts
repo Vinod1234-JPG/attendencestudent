@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { getSupabaseAnonKey, getSupabaseUrl } from '@/lib/supabase/config';
 import { createServerClient } from '@supabase/ssr';
 import {
   AdminIdentity,
@@ -39,8 +40,8 @@ export async function middleware(request: NextRequest) {
     admin = await verifyDevSession(request.cookies.get(DEV_SESSION_COOKIE)?.value);
   } else {
     const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      getSupabaseUrl()!,
+      getSupabaseAnonKey() || 'missing-anon-key',
       {
         cookies: {
           getAll() {

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { isPlaceholderMode } from '@/lib/auth/adminSession';
+import { CONFIG_HELP, SupabaseConfigError } from '@/lib/supabase/config';
 
 export const dynamic = 'force-dynamic';
 
@@ -45,7 +46,12 @@ export async function GET() {
       .eq('status', 'active')
       .maybeSingle();
 
-    if (eventErr || !event) {
+    if (eventErr) {
+      console.error('Offline prep: events query failed:', eventErr.message);
+      return NextResponse.json({ error: CONFIG_HELP }, { status: 503 });
+    }
+
+    if (!event) {
       return NextResponse.json(
         { error: 'No active event found to prepare for offline kiosk.' },
         { status: 404 }
@@ -83,6 +89,9 @@ export async function GET() {
     });
   } catch (err) {
     console.error('Offline prep exception:', err);
+    if (err instanceof SupabaseConfigError) {
+      return NextResponse.json({ error: CONFIG_HELP }, { status: 503 });
+    }
     return NextResponse.json(
       { error: 'Server error preparing offline dataset.' },
       { status: 500 }

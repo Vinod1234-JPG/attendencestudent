@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { getDevStorage } from '@/lib/db/devStore';
 import { isPlaceholderMode } from '@/lib/auth/adminSession';
 import { cleanDisplayText, validateStudentDetails } from '@/lib/utils/normalization';
+import { CONFIG_HELP, SupabaseConfigError } from '@/lib/supabase/config';
 import { findOrCreateDevStudent, findStudent } from '@/lib/students/findOrCreateStudent';
 
 export const dynamic = 'force-dynamic';
@@ -50,7 +51,12 @@ export async function POST(request: Request) {
       .eq('status', 'active')
       .maybeSingle();
 
-    if (eventErr || !event) {
+    if (eventErr) {
+      console.error('Kiosk lookup: events query failed:', eventErr.message);
+      return NextResponse.json({ error: CONFIG_HELP }, { status: 503 });
+    }
+
+    if (!event) {
       return NextResponse.json(
         { error: 'No active event is configured. Please contact the administrator.' },
         { status: 400 }
@@ -105,6 +111,9 @@ export async function POST(request: Request) {
     });
   } catch (err) {
     console.error('Kiosk lookup exception:', err);
+    if (err instanceof SupabaseConfigError) {
+      return NextResponse.json({ error: CONFIG_HELP }, { status: 503 });
+    }
     return NextResponse.json(
       { error: 'Server error checking student details.' },
       { status: 500 }

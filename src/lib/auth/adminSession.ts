@@ -7,6 +7,7 @@
  * ADMIN_PASSWORD, kept in an HMAC-signed cookie keyed by ADMIN_SESSION_SECRET.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { getSupabaseServiceKey, getSupabaseUrl } from '@/lib/supabase/config';
 
 export const DEV_SESSION_COOKIE = 'mrf_admin_session';
 export const DEV_SESSION_MAX_AGE_SECONDS = 60 * 60 * 12; // 12 hours
@@ -21,7 +22,7 @@ export interface AdminIdentity {
 }
 
 export function isPlaceholderMode(): boolean {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const url = getSupabaseUrl();
   return !url || url.includes('placeholder') || url.includes('your-project-id');
 }
 
@@ -38,14 +39,12 @@ export async function getSupabaseAdmin(supabase: SupabaseClient): Promise<AdminI
   ).data;
 
   // Fallback to service role lookup if unprivileged client was blocked by RLS
-  if (!profile && process.env.SUPABASE_SERVICE_ROLE_KEY && process.env.NEXT_PUBLIC_SUPABASE_URL) {
+  const serviceKey = getSupabaseServiceKey();
+  const supabaseUrl = getSupabaseUrl();
+  if (!profile && serviceKey && supabaseUrl) {
     try {
       const { createClient } = await import('@supabase/supabase-js');
-      const admin = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL,
-        process.env.SUPABASE_SERVICE_ROLE_KEY,
-        { auth: { persistSession: false } }
-      );
+      const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
       profile = (await admin.from('profiles').select('role').eq('id', user.id).maybeSingle()).data;
     } catch {
       // ignore fallback error

@@ -1,10 +1,11 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import { getSupabaseAnonKey, getSupabaseUrl } from './config';
 
 export function createServerSupabaseClient() {
   const cookieStore = cookies();
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-anon-key';
+  const supabaseUrl = getSupabaseUrl() || 'https://placeholder.supabase.co';
+  const supabaseAnonKey = getSupabaseAnonKey() || 'placeholder-anon-key';
 
   return createServerClient(supabaseUrl, supabaseAnonKey, {
     cookies: {

@@ -3,6 +3,7 @@ import { timingSafeEqual, createHash } from 'crypto';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { recordAuditLog } from '@/lib/utils/audit';
+import { CONFIG_HELP, SupabaseConfigError } from '@/lib/supabase/config';
 import {
   ADMIN_ROLES,
   DEV_SESSION_COOKIE,
@@ -97,6 +98,27 @@ export async function POST(request: Request) {
         metadata: { error: error?.message },
       });
 
+      const status = (error as any)?.status as number | undefined;
+      const code = (error as any)?.code as string | undefined;
+      const isCredentialProblem =
+        !error ||
+        status === 400 ||
+        status === 422 ||
+        ['invalid_credentials', 'email_not_confirmed', 'user_banned'].includes(code || '');
+
+      if (status === 429) {
+        return NextResponse.json(
+          { error: 'Too many sign-in attempts. Please wait a minute and try again.' },
+          { status: 429 }
+        );
+      }
+      if (!isCredentialProblem) {
+        // e.g. "Invalid API key": the keys configured on the server are wrong, not the user's password.
+        return NextResponse.json(
+          { error: `${CONFIG_HELP} (Supabase said: ${error?.message || 'unknown error'})` },
+          { status: 503 }
+        );
+      }
       return NextResponse.json({ error: 'Invalid email or password.' }, { status: 401 });
     }
 
@@ -142,6 +164,9 @@ export async function POST(request: Request) {
     return response;
   } catch (err) {
     console.error('Login error:', err);
+    if (err instanceof SupabaseConfigError) {
+      return NextResponse.json({ error: `${CONFIG_HELP} (${err.message})` }, { status: 503 });
+    }
     return NextResponse.json({ error: 'An unexpected server error occurred.' }, { status: 500 });
   }
 }
