@@ -5,6 +5,7 @@ import { addDevAttendanceRecord, getDevStorage } from '@/lib/db/devStore';
 import { isPlaceholderMode } from '@/lib/auth/adminSession';
 import { cleanDisplayText, validateStudentDetails } from '@/lib/utils/normalization';
 import { findOrCreateDevStudent, findOrCreateStudent } from '@/lib/students/findOrCreateStudent';
+import { emitRegistration } from '@/lib/live-bus';
 
 export const dynamic = 'force-dynamic';
 
@@ -85,6 +86,14 @@ export async function POST(request: Request) {
       };
 
       addDevAttendanceRecord(devRecord);
+
+      emitRegistration({
+        attendeeId: person.id,
+        name: person.name,
+        college: person.college || college,
+        photoUrl: devRecord.photo.signed_url,
+        capturedAt: devRecord.captured_at_device,
+      });
 
       return NextResponse.json({
         success: true,
@@ -207,7 +216,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Failed to record attendance in database.' }, { status: 500 });
     }
 
-    await Promise.allSettled([
+    const [photoInsert] = await Promise.allSettled([
       admin.from('attendance_photos').insert({
         attendance_record_id: newRecord.id,
         storage_object_key: storageKey,
@@ -230,6 +239,19 @@ export async function POST(request: Request) {
         },
       }),
     ]);
+
+    // Tell the Live Display, but only once the record AND its photo are safely stored.
+    const photoSaved =
+      !uploadErr && photoInsert.status === 'fulfilled' && !(photoInsert.value as { error?: unknown }).error;
+    if (photoSaved) {
+      emitRegistration({
+        attendeeId: personId,
+        name: person.name,
+        college: person.college,
+        photoUrl: `/api/attendance/photo?key=${encodeURIComponent(storageKey)}`,
+        capturedAt: newRecord.captured_at_device,
+      });
+    }
 
     return NextResponse.json({
       success: true,

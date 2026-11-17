@@ -1,578 +1,252 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import {
-  Users,
-  GraduationCap,
-  Search,
-  Filter,
-  CheckCircle2,
-  Clock,
-  RefreshCw,
-  Camera,
-  Eye,
-  Shield,
-  X,
-  Trash2,
-  AlertTriangle
-} from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Modal } from '@/components/ui/modal';
 
-interface Attendee {
-  id: string;
+interface Registration {
+  attendeeId: string;
   name: string;
-  category: 'guide' | 'phd_scholar' | 'student';
-  email: string | null;
-  phd_id: string | null;
-  college: string | null;
-  metadata: Record<string, any>;
-  attended: boolean;
-  attended_at: string | null;
-  photo_url: string | null;
+  college: string;
+  photoUrl: string;
+  capturedAt: string;
 }
 
-export default function RegisteredAttendeesPage() {
-  const [attendees, setAttendees] = useState<Attendee[]>([]);
-  const [counts, setCounts] = useState({
-    total: 0,
-    guides: 0,
-    scholars: 0,
-    students: 0,
-    attended: 0,
-    pending: 0,
-  });
-  const [isLoading, setIsLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('all');
+const time = (r: Registration) => {
+  const t = Date.parse(r.capturedAt);
+  return Number.isNaN(t) ? Number.POSITIVE_INFINITY : t;
+};
 
-  const searchRef = useRef('');
-  searchRef.current = debouncedSearch;
+// Font sizes (in vw) that shrink for long text so it stays within two lines.
+const nameSize = (len: number) => Math.max(2.4, Math.min(6.2, 190 / Math.max(len, 1)));
+const collegeSize = (len: number) => Math.max(1.5, Math.min(3.2, 180 / Math.max(len, 1)));
 
-  const [selectedAttendee, setSelectedAttendee] = useState<Attendee | null>(null);
+function Slide({ reg, className }: { reg: Registration; className: string }) {
+  return (
+    <div className={`absolute inset-0 flex items-center gap-[5vw] px-[5vw] ${className}`}>
+      <div className="shrink-0 w-[35vw] h-[70vh] rounded-[2vw] border-[0.7vw] border-white bg-[#0B1B30] shadow-[0_2vh_6vh_rgba(20,41,75,0.35)] overflow-hidden">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={reg.photoUrl}
+          alt={reg.name}
+          className="w-full h-full object-cover"
+          style={{ objectPosition: 'center 35%' }}
+        />
+      </div>
 
-  // Revoke attendance modal states
-  const [revokeConfirmAttendee, setRevokeConfirmAttendee] = useState<Attendee | null>(null);
-  const [isRevoking, setIsRevoking] = useState<boolean>(false);
-  const [actionFeedback, setActionFeedback] = useState<{
-    type: 'success' | 'error';
-    message: string;
-  } | null>(null);
+      <div className="min-w-0 flex-1">
+        <h1
+          className="font-extrabold text-[#14294B] leading-[1.05] line-clamp-2 break-words"
+          style={{ fontSize: `${nameSize(reg.name.length)}vw` }}
+        >
+          {reg.name}
+        </h1>
+        {reg.college && (
+          <p
+            className="mt-[2.5vh] text-slate-500 font-medium leading-snug line-clamp-2 break-words"
+            style={{ fontSize: `${collegeSize(reg.college.length)}vw` }}
+          >
+            {reg.college}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
 
-  // Auto-debounce search as user types after 250ms
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedSearch(search);
-    }, 250);
-    return () => clearTimeout(handler);
-  }, [search]);
+export default function LiveDisplayPage() {
+  const [current, setCurrent] = useState<Registration | null>(null);
+  const [previous, setPrevious] = useState<Registration | null>(null);
+  const [slideKey, setSlideKey] = useState(0);
+  const [moving, setMoving] = useState(false);
+  const currentRef = useRef<Registration | null>(null);
+  const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearPrev = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const fetchAttendees = async (term = searchRef.current) => {
-    setIsLoading(true);
+  /** Shows a registration if it is newer than the one on screen; preloads the photo first. */
+  const apply = useCallback((reg: Registration) => {
+    if (!reg || !reg.name || !reg.photoUrl) return;
+    const shown = currentRef.current;
+    if (shown && !(time(reg) > time(shown))) return; // late offline syncs must not replace a newer student
+
+    const swap = () => {
+      const now = currentRef.current;
+      if (now && !(time(reg) > time(now))) return; // something newer arrived while the image loaded
+      setPrevious(now);
+      currentRef.current = reg;
+      setCurrent(reg);
+      setSlideKey((k) => k + 1);
+      if (clearPrev.current) clearTimeout(clearPrev.current);
+      clearPrev.current = setTimeout(() => setPrevious(null), 450);
+    };
+
+    const img = new Image();
+    img.onload = swap;
+    img.onerror = swap; // still show the name even if the photo failed to load
+    img.src = reg.photoUrl;
+  }, []);
+
+  const fetchLatest = useCallback(async () => {
     try {
-      const params = new URLSearchParams({
-        category: categoryFilter,
-        status: statusFilter,
-        search: (term ?? '').trim(),
-        _t: Date.now().toString(),
-      });
-
-      const res = await fetch(`/api/admin/attendees?${params.toString()}`, {
-        cache: 'no-store',
-      });
-      const data = await res.json();
-
-      if (res.ok && data.success) {
-        setAttendees(data.attendees || []);
-        if (data.counts) {
-          setCounts(data.counts);
-        }
+      const res = await fetch(`/api/admin/live/latest?_t=${Date.now()}`, { cache: 'no-store' });
+      if (res.status === 401) {
+        window.location.href = '/login?next=/admin/attendees';
+        return;
       }
-    } catch (e) {
-      console.warn('Failed to load registered attendees:', e);
-    } finally {
-      setIsLoading(false);
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.registration) apply(data.registration as Registration);
+    } catch {
+      // network hiccup: the next poll or stream event will catch up
     }
-  };
+  }, [apply]);
 
+  // Initial load + live stream + safety poll
   useEffect(() => {
-    fetchAttendees(debouncedSearch);
+    fetchLatest();
 
-    // Auto-refresh when tab gains focus or every 10 seconds for real-time live events
-    const onFocus = () => fetchAttendees(searchRef.current);
-    window.addEventListener('focus', onFocus);
-    const interval = setInterval(() => fetchAttendees(searchRef.current), 10000);
+    let es: EventSource | null = null;
+    try {
+      es = new EventSource('/api/admin/live/stream');
+      es.addEventListener('ready', () => fetchLatest());
+      es.addEventListener('registration', (e) => {
+        try {
+          apply(JSON.parse((e as MessageEvent).data));
+        } catch {
+          // ignore malformed event
+        }
+      });
+    } catch {
+      // EventSource unavailable: polling below still works
+    }
+
+    // Serverless hosts can route the kiosk request and this stream to different instances, so a light
+    // poll runs as a safety net. It is one tiny request every 5 seconds.
+    const poll = setInterval(fetchLatest, 5000);
 
     return () => {
-      window.removeEventListener('focus', onFocus);
-      clearInterval(interval);
+      es?.close();
+      clearInterval(poll);
+      if (clearPrev.current) clearTimeout(clearPrev.current);
     };
-  }, [categoryFilter, statusFilter, debouncedSearch]);
+  }, [apply, fetchLatest]);
 
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setDebouncedSearch(search);
-    fetchAttendees(search);
-  };
+  // Cover the whole viewport, no scrollbars
+  useEffect(() => {
+    const prevBody = document.body.style.overflow;
+    const prevHtml = document.documentElement.style.overflow;
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prevBody;
+      document.documentElement.style.overflow = prevHtml;
+    };
+  }, []);
 
-  const handleClearSearch = () => {
-    setSearch('');
-    setDebouncedSearch('');
-    fetchAttendees('');
-  };
-
-  // Safe removal of attendance record only (preserves person in `people` table)
-  const handleRevokeAttendance = async () => {
-    if (!revokeConfirmAttendee) return;
-    setIsRevoking(true);
-    setActionFeedback(null);
-
-    try {
-      const res = await fetch(`/api/attendance?person_id=${encodeURIComponent(revokeConfirmAttendee.id)}`, {
-        method: 'DELETE',
-      });
-      const data = await res.json();
-
-      if (res.ok && data.success) {
-        setActionFeedback({
-          type: 'success',
-          message: `Attendance for "${revokeConfirmAttendee.name}" removed successfully. Status reset to Pending.`,
-        });
-        setRevokeConfirmAttendee(null);
-        setSelectedAttendee(null);
-        fetchAttendees(searchRef.current);
-      } else {
-        setActionFeedback({
-          type: 'error',
-          message: data.error || 'Failed to remove attendance record.',
-        });
+  // Keep the screen awake
+  useEffect(() => {
+    let lock: { release: () => Promise<void> } | null = null;
+    const acquire = async () => {
+      try {
+        lock = await (navigator as any).wakeLock?.request('screen');
+      } catch {
+        // not supported or denied
       }
-    } catch (e: any) {
-      setActionFeedback({
-        type: 'error',
-        message: e.message || 'Network error while removing attendance.',
-      });
-    } finally {
-      setIsRevoking(false);
+    };
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') acquire();
+    };
+    acquire();
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      lock?.release().catch(() => {});
+    };
+  }, []);
+
+  // Fullscreen on click or "F"
+  const toggleFullscreen = useCallback(() => {
+    try {
+      if (document.fullscreenElement) document.exitFullscreen();
+      else document.documentElement.requestFullscreen();
+    } catch {
+      // ignore
     }
+  }, []);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'f' || e.key === 'F') toggleFullscreen();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [toggleFullscreen]);
+
+  // Hide the cursor and the dashboard link after 3 s without mouse movement
+  const onMouseMove = () => {
+    setMoving(true);
+    if (idleTimer.current) clearTimeout(idleTimer.current);
+    idleTimer.current = setTimeout(() => setMoving(false), 3000);
   };
+  useEffect(
+    () => () => {
+      if (idleTimer.current) clearTimeout(idleTimer.current);
+    },
+    []
+  );
 
   return (
-    <div className="space-y-6">
-      {/* Page Title & Actions */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-extrabold text-[#142D4E]">Registered Attendees</h1>
-          <p className="text-xs text-[#667085] mt-1">
-            Students who have registered themselves at the attendance kiosk.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => fetchAttendees(searchRef.current)}
-            className="flex items-center gap-1.5"
-            disabled={isLoading}
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-            <span>Refresh</span>
-          </Button>
-        </div>
-      </div>
-
-      {/* Action Feedback Banner */}
-      {actionFeedback && (
-        <div
-          className={`p-4 rounded-xl border flex items-center justify-between animate-fadeIn ${
-            actionFeedback.type === 'success'
-              ? 'bg-[#16835D]/10 border-[#16835D]/30 text-[#16835D]'
-              : 'bg-[#C0393A]/10 border-[#C0393A]/30 text-[#C0393A]'
+    <div
+      onClick={() => !document.fullscreenElement && toggleFullscreen()}
+      onMouseMove={onMouseMove}
+      className={`fixed inset-0 z-[100] overflow-hidden bg-gradient-to-br from-[#F4F7FB] to-[#E3EBF6] select-none ${
+        moving ? '' : 'cursor-none'
+      }`}
+    >
+      {/* Top bar */}
+      <header className="absolute inset-x-0 top-0 h-[max(9vh,52px)] bg-[#14294B] flex items-center gap-[1.2vw] px-[2.5vw] shadow-md z-10">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/logo.jpg"
+          alt="MIT Mysore"
+          className="h-[max(6vh,36px)] aspect-square rounded-full bg-white p-[2px] object-contain"
+        />
+        <span className="text-white font-bold tracking-wide" style={{ fontSize: 'max(2.6vh, 14px)' }}>
+          MIT Mysore Student Attendance Tracker
+        </span>
+        <Link
+          href="/admin"
+          onClick={(e) => e.stopPropagation()}
+          className={`ml-auto rounded-full bg-white/15 px-[1.2vw] py-[0.8vh] text-white/90 hover:bg-white/25 transition-opacity duration-300 ${
+            moving ? 'opacity-100' : 'opacity-0 pointer-events-none'
           }`}
+          style={{ fontSize: 'max(1.9vh, 12px)' }}
         >
-          <div className="flex items-center gap-2 text-xs font-semibold">
-            {actionFeedback.type === 'success' ? (
-              <CheckCircle2 className="w-4 h-4 shrink-0" />
-            ) : (
-              <AlertTriangle className="w-4 h-4 shrink-0" />
-            )}
-            <span>{actionFeedback.message}</span>
-          </div>
-          <button
-            onClick={() => setActionFeedback(null)}
-            className="p-1 hover:bg-black/5 rounded text-current"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
+          ← Dashboard
+        </Link>
+      </header>
 
-      {/* Summary KPI Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Card className="p-4 bg-white">
-          <p className="text-[11px] font-semibold text-[#667085]">Total Registered</p>
-          <p className="text-2xl font-black text-[#142D4E] mt-1">{counts.total}</p>
-        </Card>
-        <Card className="p-4 bg-white">
-          <p className="text-[11px] font-semibold text-[#667085] flex items-center gap-1">
-            <GraduationCap className="w-3 h-3 text-[#2864B4]" /> Students
-          </p>
-          <p className="text-2xl font-black text-[#2864B4] mt-1">{counts.students ?? counts.total}</p>
-        </Card>
-        <Card className="p-4 bg-white border-l-4 border-l-[#16835D]">
-          <p className="text-[11px] font-semibold text-[#667085] flex items-center gap-1">
-            <CheckCircle2 className="w-3 h-3 text-[#16835D]" /> Attended
-          </p>
-          <p className="text-2xl font-black text-[#16835D] mt-1">{counts.attended}</p>
-        </Card>
-        <Card className="p-4 bg-white border-l-4 border-l-[#D97706]">
-          <p className="text-[11px] font-semibold text-[#667085] flex items-center gap-1">
-            <Clock className="w-3 h-3 text-[#D97706]" /> Pending Check-in
-          </p>
-          <p className="text-2xl font-black text-[#D97706] mt-1">{counts.pending}</p>
-        </Card>
+      {/* Stage */}
+      <div className="absolute inset-x-0 top-[max(9vh,52px)] bottom-0">
+        {previous && <Slide key={`prev-${slideKey}`} reg={previous} className="live-fade-out" />}
+        {current ? (
+          <Slide key={`cur-${slideKey}`} reg={current} className={previous ? 'live-fade-in' : ''} />
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <p className="text-slate-500 font-semibold animate-pulse" style={{ fontSize: 'max(3.4vh, 18px)' }}>
+              Waiting for registration…
+            </p>
+          </div>
+        )}
       </div>
 
-      {/* Filters and Search Bar */}
-      <Card>
-        <CardContent className="p-4 space-y-4 md:space-y-0 md:flex md:items-center md:justify-between gap-4">
-          {/* Real-time Debounced Search */}
-          <form onSubmit={handleSearchSubmit} className="relative flex-1 max-w-md flex items-center">
-            <Search className="w-4 h-4 absolute left-3 top-3 text-[#667085]" />
-            <input
-              type="text"
-              placeholder="Search by student name or college (instant filter)..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-9 py-2 bg-[#F7F9FC] border border-[#E4E9F0] rounded-lg text-xs text-[#182230] placeholder-[#667085] focus:outline-none focus:border-[#2864B4] focus:ring-1 focus:ring-[#2864B4]"
-            />
-            {search && (
-              <button
-                type="button"
-                onClick={handleClearSearch}
-                className="absolute right-3 top-2.5 text-[#667085] hover:text-[#182230]"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
-          </form>
-
-          {/* Filter Pills */}
-          <div className="flex flex-wrap items-center gap-3">
-            {/* Attendance Status Filter */}
-            <div className="flex items-center gap-1">
-              <span className="text-xs text-[#667085] font-medium mr-1">Status:</span>
-              <div className="inline-flex p-1 bg-[#EEF1F5] rounded-lg border border-[#E4E9F0]">
-                {[
-                  { key: 'all', label: 'All' },
-                  { key: 'attended', label: 'Attended' },
-                  { key: 'pending', label: 'Pending' },
-                ].map((s) => (
-                  <button
-                    key={s.key}
-                    type="button"
-                    onClick={() => setStatusFilter(s.key)}
-                    className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-all ${
-                      statusFilter === s.key
-                        ? 'bg-white text-[#142D4E] shadow-2xs'
-                        : 'text-[#667085] hover:text-[#182230]'
-                    }`}
-                  >
-                    {s.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Attendees Table */}
-      <Card>
-        <CardHeader className="border-b border-[#E4E9F0] pb-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-sm font-bold text-[#142D4E]">
-              Registered Enrolment Roster ({attendees.length})
-            </CardTitle>
-            <span className="text-xs text-[#667085]">
-              <strong>MIT Mysore Students</strong>
-            </span>
-          </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr className="border-b border-[#E4E9F0] bg-[#F7F9FC] text-[#667085] font-semibold">
-                  <th className="px-6 py-3.5">Student Name</th>
-                  <th className="px-6 py-3.5">College</th>
-                  <th className="px-6 py-3.5">Attendance</th>
-                  <th className="px-6 py-3.5">Photo</th>
-                  <th className="px-6 py-3.5 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#E4E9F0]">
-                {isLoading ? (
-                  <tr>
-                    <td colSpan={5} className="px-6 py-8 text-center text-[#667085]">
-                      <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-[#2864B4]" />
-                      Loading student records...
-                    </td>
-                  </tr>
-                ) : attendees.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="px-6 py-8 text-center text-[#667085]">
-                      No students match the current filters or search term.
-                    </td>
-                  </tr>
-                ) : (
-                  attendees.map((attendee) => (
-                    <tr key={attendee.id} className="hover:bg-[#F7F9FC]/70 transition-colors">
-                      {/* Name */}
-                      <td className="px-6 py-3.5 font-bold text-[#182230]">
-                        {attendee.name}
-                      </td>
-
-                      {/* College */}
-                      <td className="px-6 py-3.5 text-[#667085]">
-                        {attendee.college ||
-                          attendee.metadata?.College ||
-                          attendee.metadata?.Department ||
-                          attendee.metadata?.Institution ||
-                          '—'}
-                      </td>
-
-                      {/* Attendance Status */}
-                      <td className="px-6 py-3.5">
-                        {attendee.attended ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#16835D] bg-[#16835D]/10 px-2 py-0.5 rounded-full border border-[#16835D]/20">
-                            <CheckCircle2 className="w-3 h-3" /> Attended
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-[#D97706] bg-[#D97706]/10 px-2 py-0.5 rounded-full border border-[#D97706]/20">
-                            <Clock className="w-3 h-3" /> Pending
-                          </span>
-                        )}
-                      </td>
-
-                      {/* Photo */}
-                      <td className="px-6 py-3.5">
-                        {attendee.photo_url ? (
-                          <div className="w-9 h-9 rounded-md overflow-hidden bg-[#EEF1F5] border border-[#CBD5E1]">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={attendee.photo_url}
-                              alt={attendee.name}
-                              className="w-full h-full object-cover"
-                            />
-                          </div>
-                        ) : (
-                          <div className="w-9 h-9 rounded-md bg-[#EEF1F5] flex items-center justify-center text-[#94A3B8] border border-[#E4E9F0]">
-                            <Camera className="w-3.5 h-3.5" />
-                          </div>
-                        )}
-                      </td>
-
-                      {/* Actions */}
-                      <td className="px-6 py-3.5 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setSelectedAttendee(attendee)}
-                          >
-                            <Eye className="w-3.5 h-3.5 mr-1" /> View Details
-                          </Button>
-                          {attendee.attended && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setRevokeConfirmAttendee(attendee)}
-                              className="border-[#C0393A]/30 text-[#C0393A] hover:bg-[#C0393A]/10 hover:border-[#C0393A]"
-                              title="Remove attendance and photo (Attendee remains safely in registry)"
-                            >
-                              <Trash2 className="w-3.5 h-3.5 mr-1 text-[#C0393A]" /> Revoke
-                            </Button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Footer Count */}
-          <div className="px-6 py-3 border-t border-[#E4E9F0] text-xs text-[#667085]">
-            Showing {attendees.length} of {counts.total} registered attendees
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Details Modal */}
-      {selectedAttendee && (
-        <Modal
-          isOpen={!!selectedAttendee}
-          onClose={() => setSelectedAttendee(null)}
-          title="Attendee Profile & Check-in Details"
-          maxWidth="lg"
-        >
-          <div className="space-y-6">
-            {/* Photo Section */}
-            {selectedAttendee.photo_url && (
-              <div className="flex justify-center">
-                <div className="relative w-48 h-48 rounded-xl overflow-hidden border-2 border-[#142D4E] shadow-sm bg-[#EEF1F5]">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={selectedAttendee.photo_url}
-                    alt={selectedAttendee.name}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Profile Grid */}
-            <div className="bg-[#F7F9FC] border border-[#E4E9F0] rounded-xl p-4 space-y-2.5 text-xs">
-              <div className="flex justify-between border-b border-[#E4E9F0] pb-2">
-                <span className="text-[#667085]">Student Name:</span>
-                <span className="font-bold text-[#182230]">{selectedAttendee.name}</span>
-              </div>
-              <div className="flex justify-between border-b border-[#E4E9F0] pb-2">
-                <span className="text-[#667085]">College Name:</span>
-                <span className="font-semibold text-[#182230]">
-                  {selectedAttendee.college || selectedAttendee.metadata?.College || '—'}
-                </span>
-              </div>
-              <div className="flex justify-between border-b border-[#E4E9F0] pb-2">
-                <span className="text-[#667085]">Attendance Status:</span>
-                <span className="font-semibold">
-                  {selectedAttendee.attended ? (
-                    <span className="text-[#16835D]">
-                      Attended ({new Date(selectedAttendee.attended_at!).toLocaleString()})
-                    </span>
-                  ) : (
-                    <span className="text-[#D97706]">Awaiting Check-in</span>
-                  )}
-                </span>
-              </div>
-
-              {/* Extra Metadata Columns */}
-              {selectedAttendee.metadata && Object.keys(selectedAttendee.metadata).length > 0 && (
-                <div className="pt-2 space-y-1.5">
-                  <span className="text-[11px] font-bold text-[#142D4E] uppercase tracking-wider block">
-                    Additional Details:
-                  </span>
-                  {Object.entries(selectedAttendee.metadata).map(([k, v]) => (
-                    <div key={k} className="flex justify-between text-xs">
-                      <span className="text-[#667085]">{k}:</span>
-                      <span className="font-semibold text-[#182230]">{String(v)}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="flex items-center justify-between pt-2">
-              {selectedAttendee.attended ? (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    const att = selectedAttendee;
-                    setSelectedAttendee(null);
-                    setRevokeConfirmAttendee(att);
-                  }}
-                  className="border-[#C0393A]/30 text-[#C0393A] hover:bg-[#C0393A]/10 hover:border-[#C0393A]"
-                >
-                  <Trash2 className="w-3.5 h-3.5 mr-1.5 text-[#C0393A]" /> Revoke Attendance (Reset to Pending)
-                </Button>
-              ) : (
-                <div />
-              )}
-
-              <Button variant="outline" size="sm" onClick={() => setSelectedAttendee(null)}>
-                Close
-              </Button>
-            </div>
-          </div>
-        </Modal>
-      )}
-
-      {/* Confirmation Modal for Revoking Attendance */}
-      {revokeConfirmAttendee && (
-        <Modal
-          isOpen={!!revokeConfirmAttendee}
-          onClose={() => !isRevoking && setRevokeConfirmAttendee(null)}
-          title="Confirm Revoke Attendance"
-          maxWidth="md"
-        >
-          <div className="space-y-4">
-            <div className="p-3 bg-[#C0393A]/10 border border-[#C0393A]/20 rounded-xl flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-[#C0393A] shrink-0 mt-0.5" />
-              <div className="text-xs text-[#182230] space-y-1">
-                <p className="font-bold text-sm text-[#C0393A]">
-                  Remove attendance for &ldquo;{revokeConfirmAttendee.name}&rdquo;?
-                </p>
-                <p className="text-[#667085]">
-                  This will delete the attendance record, check-in timestamp, and captured photograph.
-                </p>
-                <p className="text-[#16835D] font-semibold">
-                  ✓ Safe Action: The registered person will NOT be deleted. Their profile and enrollment details remain safely in the registry and their status will revert to &ldquo;Pending&rdquo;.
-                </p>
-              </div>
-            </div>
-
-            <div className="p-3 bg-[#F7F9FC] border border-[#E4E9F0] rounded-lg text-xs space-y-1.5">
-              <div className="flex justify-between">
-                <span className="text-[#667085]">Student Name:</span>
-                <span className="font-bold text-[#142D4E]">{revokeConfirmAttendee.name}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-[#667085]">College:</span>
-                <span className="text-[#182230]">
-                  {revokeConfirmAttendee.college || revokeConfirmAttendee.metadata?.College || '—'}
-                </span>
-              </div>
-              {revokeConfirmAttendee.attended_at && (
-                <div className="flex justify-between">
-                  <span className="text-[#667085]">Recorded Check-In:</span>
-                  <span className="font-mono text-[#182230]">
-                    {new Date(revokeConfirmAttendee.attended_at).toLocaleString()}
-                  </span>
-                </div>
-              )}
-            </div>
-
-            <div className="flex justify-end gap-3 pt-2">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={isRevoking}
-                onClick={() => setRevokeConfirmAttendee(null)}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="primary"
-                size="sm"
-                isLoading={isRevoking}
-                onClick={handleRevokeAttendance}
-                className="bg-[#C0393A] hover:bg-[#A82D2E] text-white font-semibold"
-              >
-                <Trash2 className="w-3.5 h-3.5 mr-1.5" /> Confirm Remove Attendance
-              </Button>
-            </div>
-          </div>
-        </Modal>
-      )}
+      <style jsx global>{`
+        @keyframes liveFadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes liveFadeOut { from { opacity: 1; } to { opacity: 0; } }
+        .live-fade-in { animation: liveFadeIn 400ms ease forwards; }
+        .live-fade-out { animation: liveFadeOut 400ms ease forwards; }
+        @media (prefers-reduced-motion: reduce) {
+          .live-fade-in, .live-fade-out { animation-duration: 1ms; }
+        }
+      `}</style>
     </div>
   );
 }

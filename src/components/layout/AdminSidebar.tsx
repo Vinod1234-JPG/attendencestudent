@@ -16,6 +16,7 @@ import {
   GraduationCap,
   Users,
   UserPlus,
+  MonitorPlay,
 } from 'lucide-react';
 
 interface AdminSidebarProps {
@@ -43,7 +44,7 @@ export function AdminSidebar({
   const navItems = [
     { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
     { label: 'Student Registration', href: '/admin/students', icon: UserPlus },
-    { label: 'Registered Attendees', href: '/admin/attendees', icon: Users },
+    { label: 'Live Display', href: '/admin/attendees', icon: MonitorPlay },
     { label: 'Take Attendance', href: '/kiosk', icon: QrCode, isExternal: true },
     { label: 'Attendance Records', href: '/admin/attendance', icon: ClipboardList },
     { label: 'Export Attendance Details', href: '/admin/exports', icon: Download },

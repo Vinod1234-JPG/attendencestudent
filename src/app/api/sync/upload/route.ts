@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { recordAuditLog } from '@/lib/utils/audit';
 import { cleanDisplayText, validateStudentDetails } from '@/lib/utils/normalization';
 import { findOrCreateStudent } from '@/lib/students/findOrCreateStudent';
+import { emitRegistration } from '@/lib/live-bus';
 
 export async function POST(request: Request) {
   try {
@@ -210,13 +211,27 @@ export async function POST(request: Request) {
     }
 
     // 6. Insert Photo Metadata
-    await admin.from('attendance_photos').insert({
+    const { error: photoMetaErr } = await admin.from('attendance_photos').insert({
       attendance_record_id: record.id,
       storage_object_key: storageKey,
       content_type: photoFile.type || 'image/jpeg',
       file_size: photoFile.size,
       status: 'active',
     });
+
+    // Tell the Live Display (students only) once the record AND photo are stored.
+    if (category === 'student' && !uploadErr && !photoMetaErr) {
+      const { data: who } = await admin.from('people').select('name, college').eq('id', personId).maybeSingle();
+      if (who?.name) {
+        emitRegistration({
+          attendeeId: personId,
+          name: who.name,
+          college: who.college || '',
+          photoUrl: `/api/attendance/photo?key=${encodeURIComponent(storageKey)}`,
+          capturedAt: capturedAtDevice,
+        });
+      }
+    }
 
     // 7. Audit Log
     await recordAuditLog({

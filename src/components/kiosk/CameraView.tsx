@@ -4,6 +4,28 @@ import React, { useRef, useState, useEffect } from 'react';
 import { Camera, RefreshCw, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
+// Capture settings: a 960px-wide frame stays sharp on a large display; frames darker than this are rejected.
+const CAPTURE_MAX_WIDTH = 960;
+const JPEG_QUALITY = 0.85;
+const MIN_BRIGHTNESS = 40; // mean luminance, 0-255
+const WARMUP_MS = 600; // let the camera's auto-exposure settle after the first frame
+
+/** Mean luminance (0-255) of a canvas, sampled on a small copy for speed. */
+function meanBrightness(source: HTMLCanvasElement): number {
+  const sample = document.createElement('canvas');
+  sample.width = 48;
+  sample.height = 36;
+  const ctx = sample.getContext('2d');
+  if (!ctx) return 255; // cannot measure: do not block the capture
+  ctx.drawImage(source, 0, 0, sample.width, sample.height);
+  const { data } = ctx.getImageData(0, 0, sample.width, sample.height);
+  let sum = 0;
+  for (let i = 0; i < data.length; i += 4) {
+    sum += 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+  }
+  return sum / (data.length / 4);
+}
+
 interface CameraViewProps {
   onCapture: (blob: Blob, dataUrl: string) => void;
   onCancel: () => void;
@@ -15,9 +37,23 @@ export function CameraView({ onCapture, onCancel }: CameraViewProps) {
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isInitializing, setIsInitializing] = useState<boolean>(true);
+  const [isReady, setIsReady] = useState<boolean>(false);
+  const [captureWarning, setCaptureWarning] = useState<string | null>(null);
+  const warmupRef = useRef<number | null>(null);
+
+  // Enable capture only once real frames are flowing, plus a short warm-up for auto-exposure.
+  const handlePlaying = () => {
+    if (warmupRef.current) window.clearTimeout(warmupRef.current);
+    warmupRef.current = window.setTimeout(() => {
+      const v = videoRef.current;
+      if (v && v.readyState >= 2 && v.videoWidth > 0) setIsReady(true);
+    }, WARMUP_MS);
+  };
 
   const startCamera = async () => {
     setIsInitializing(true);
+    setIsReady(false);
+    setCaptureWarning(null);
     setErrorMessage(null);
 
     // Stop existing tracks if any
@@ -63,6 +99,7 @@ export function CameraView({ onCapture, onCancel }: CameraViewProps) {
     startCamera();
 
     return () => {
+      if (warmupRef.current) window.clearTimeout(warmupRef.current);
       // Clean up camera stream tracks when unmounting
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((track) => track.stop());
@@ -71,16 +108,16 @@ export function CameraView({ onCapture, onCancel }: CameraViewProps) {
   }, []);
 
   const handleCapture = () => {
-    if (!videoRef.current) return;
+    const video = videoRef.current;
+    if (!video || !isReady || video.readyState < 2 || video.videoWidth === 0) return;
+    setCaptureWarning(null);
 
     try {
-      const video = videoRef.current;
       const originalWidth = video.videoWidth || 640;
       const originalHeight = video.videoHeight || 480;
 
-      // Optimize for high concurrency & free-tier storage:
-      // Scale to max width 640px (crisp portrait headshot, ~35KB vs ~300KB)
-      const targetWidth = Math.min(640, originalWidth);
+      // Scale to a max width of 960px: sharp on a large screen without bloating storage.
+      const targetWidth = Math.min(CAPTURE_MAX_WIDTH, originalWidth);
       const targetHeight = Math.round((originalHeight / originalWidth) * targetWidth);
 
       const canvas = document.createElement('canvas');
@@ -95,7 +132,13 @@ export function CameraView({ onCapture, onCancel }: CameraViewProps) {
       ctx.scale(-1, 1);
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+      // Reject near-black frames (camera still waking up, covered lens, or a dark room).
+      if (meanBrightness(canvas) < MIN_BRIGHTNESS) {
+        setCaptureWarning('Photo is too dark — please face the light and retake.');
+        return; // keep the camera running; nothing is captured
+      }
+
+      const dataUrl = canvas.toDataURL('image/jpeg', JPEG_QUALITY);
 
       canvas.toBlob(
         (blob) => {
@@ -110,7 +153,7 @@ export function CameraView({ onCapture, onCancel }: CameraViewProps) {
           }
         },
         'image/jpeg',
-        0.8
+        JPEG_QUALITY
       );
     } catch (err: any) {
       setErrorMessage(err.message || 'Capture failed.');
@@ -158,6 +201,7 @@ export function CameraView({ onCapture, onCancel }: CameraViewProps) {
           autoPlay
           playsInline
           muted
+          onPlaying={handlePlaying}
           className="w-full h-full object-cover transform scale-x-[-1]"
         />
 
@@ -168,6 +212,19 @@ export function CameraView({ onCapture, onCancel }: CameraViewProps) {
           </div>
         )}
       </div>
+
+      {captureWarning && (
+        <div
+          role="alert"
+          className="mt-4 w-full flex items-center gap-2 rounded-lg border border-[#C0393A]/30 bg-[#FEF3F2] px-3.5 py-2.5 text-sm text-[#B42318]"
+        >
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span>{captureWarning}</span>
+        </div>
+      )}
+      {!captureWarning && hasPermission && !isInitializing && !isReady && (
+        <p className="mt-4 text-xs text-[#667085]">Getting the camera ready…</p>
+      )}
 
       {/* Actions */}
       <div className="flex items-center gap-4 mt-6 w-full justify-center">
@@ -183,7 +240,7 @@ export function CameraView({ onCapture, onCancel }: CameraViewProps) {
           variant="primary"
           size="xl"
           onClick={handleCapture}
-          disabled={isInitializing || !!errorMessage}
+          disabled={isInitializing || !!errorMessage || !isReady}
           className="px-8 shadow-md"
         >
           <Camera className="w-5 h-5 mr-2" />
