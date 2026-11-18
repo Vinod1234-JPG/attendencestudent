@@ -32,6 +32,8 @@ const GOLD_LIGHT = '#FFD76A';
 const COLLEGE_LOGO = '/mitm-logo.png';
 const CAMPUS_PHOTO = '/mitm-campus.jpg';
 const DEPT_LOGO = '/mitm-cse-logo.png';
+const DEVELOPER_LOGO = '/vovalyx-logo.png';
+const DEVELOPER_URL = 'https://www.vovalyx.in/';
 
 /** Cinematic backdrop: navy base, gold and blue glows, campus on the right, light streaks. */
 function Backdrop() {
@@ -79,6 +81,29 @@ function Backdrop() {
       />
       <div className="absolute inset-0" style={{ boxShadow: 'inset 0 0 12vw rgba(1,3,10,0.8)' }} />
     </div>
+  );
+}
+
+/** "Developed by Vovalyx" credit, bottom-left, linking to the company website. */
+function DeveloperCredit() {
+  return (
+    <a
+      href={DEVELOPER_URL}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={(e) => e.stopPropagation()}
+      className="absolute bottom-[3cqh] left-[3cqw] z-20 flex items-center gap-[0.7cqw] text-white/80 transition-opacity hover:text-white"
+      aria-label="Developed by Vovalyx (opens vovalyx.in)"
+    >
+      <span className="font-medium text-slate-300/80" style={{ fontSize: 'max(1.7cqh, 11px)' }}>
+        Developed by
+      </span>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={DEVELOPER_LOGO} alt="" className="aspect-square h-[max(3.6cqh,22px)] object-contain" />
+      <span className="font-bold tracking-tight text-white" style={{ fontSize: 'max(2.4cqh, 14px)' }}>
+        Vovalyx
+      </span>
+    </a>
   );
 }
 
@@ -419,6 +444,7 @@ export default function LiveDisplayPage() {
       >
       <Brand />
       <DeptBrand />
+      <DeveloperCredit />
 
       <Link
         href="/admin"
