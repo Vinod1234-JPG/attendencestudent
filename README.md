@@ -183,6 +183,15 @@ There are no built-in or shared passwords. Every `/admin` page and every non-kio
   2. In the SQL Editor: `INSERT INTO public.profiles (id, role, full_name) VALUES ('<user uuid>', 'admin', 'Name');`
 - **Local development without Supabase:** set `ADMIN_EMAIL`, `ADMIN_PASSWORD` and `ADMIN_SESSION_SECRET` (32+ random characters) in `.env.local`. Login is refused until all three are set.
 
+### Teachers
+Admins can create any number of teacher logins under **Teachers** in the sidebar (name, email and a password the admin chooses; a Generate button makes a strong one). One-time setup: run `supabase/migrations/00004_teachers.sql` in the Supabase SQL Editor.
+
+- A teacher signs in at the same `/login` page and gets the same dashboard, but **only sees the students they registered**: Dashboard totals, Student Registration, Attendance Records, Exports, photos and their own **Live Display**.
+- A student is registered by whoever is signed in on the kiosk browser. A teacher uses **Take Attendance** in their sidebar (it opens the kiosk in the same browser; the kiosk header shows "Registering as <name>"). A kiosk with nobody signed in registers anonymously; those show on the admin's Live Display.
+- The admin's Live Display shows the admin's own and anonymous registrations; open `/admin/attendees?scope=all` to see every teacher's on one screen.
+- Teachers do not get Teachers, Event Settings (including Remove all data), Sync Status or Audit Log.
+- Removing a teacher keeps the students they registered (they become unassigned).
+
 Public (no login) routes are only those the kiosk needs: `/api/kiosk/*`, `/api/sync/upload`, `/api/auth/login`, `/api/auth/logout`.
 
 ---

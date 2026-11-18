@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { recordAuditLog } from '@/lib/utils/audit';
-import { requireAdmin } from '@/lib/auth/requireAdmin';
+import { requireAdmin, requireStaff } from '@/lib/auth/requireAdmin';
 
 export async function GET() {
-  const auth = await requireAdmin();
+  const auth = await requireStaff();
   if (auth.response) return auth.response;
 
   try {

@@ -5,7 +5,8 @@ import JSZip from 'jszip';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { recordAuditLog } from '@/lib/utils/audit';
-import { requireAdmin } from '@/lib/auth/requireAdmin';
+import { requireStaff } from '@/lib/auth/requireAdmin';
+import { isTeacher } from '@/lib/auth/staffScope';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,7 +21,7 @@ function sanitizeCell(val: any): string {
 }
 
 export async function GET(request: Request) {
-  const auth = await requireAdmin();
+  const auth = await requireStaff();
   if (auth.response) return auth.response;
 
   try {
@@ -30,6 +31,8 @@ export async function GET(request: Request) {
     const source = searchParams.get('source') || 'attendance'; // 'attendance' or 'registered'
 
     const admin = createAdminClient();
+    // Teachers can only export the students and check-ins they registered.
+    const onlyMine = isTeacher(auth.admin) ? (auth.admin.id as string) : null;
 
     let items: any[] = [];
 
@@ -53,6 +56,7 @@ export async function GET(request: Request) {
         peopleQuery = peopleQuery.eq('category', 'student');
       }
 
+      if (onlyMine) peopleQuery = peopleQuery.eq('registered_by', onlyMine);
       peopleQuery = peopleQuery.order('category', { ascending: false }).order('name', { ascending: true });
 
       const { data: peopleList, error: peopleErr } = await peopleQuery;
@@ -61,7 +65,7 @@ export async function GET(request: Request) {
       }
 
       // Fetch attendance records and photos for these registered attendees
-      const { data: attList } = await admin.from('attendance_records').select(`
+      let attListQuery = admin.from('attendance_records').select(`
         id,
         person_id,
         operation_id,
@@ -81,6 +85,8 @@ export async function GET(request: Request) {
           file_size
         )
       `);
+      if (onlyMine) attListQuery = attListQuery.eq('registered_by', onlyMine);
+      const { data: attList } = await attListQuery;
 
       const attByPerson = new Map<string, any>();
       (attList || []).forEach((att) => {
@@ -140,6 +146,7 @@ export async function GET(request: Request) {
         query = query.eq('people.category', 'student');
       }
 
+      if (onlyMine) query = query.eq('registered_by', onlyMine);
       query = query.order('captured_at_device', { ascending: true });
 
       const { data: records, error } = await query;

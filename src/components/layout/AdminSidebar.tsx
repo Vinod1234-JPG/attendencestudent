@@ -22,11 +22,14 @@ import {
 interface AdminSidebarProps {
   userEmail?: string;
   userRole?: string;
+  /** Raw role: 'admin' | 'super_admin' | 'teacher'. Teachers do not see the admin-only pages. */
+  role?: string;
 }
 
 export function AdminSidebar({
   userEmail = 'admin@mrf.org',
   userRole = 'Administrator',
+  role = 'admin',
 }: AdminSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -41,17 +44,20 @@ export function AdminSidebar({
     router.refresh();
   };
 
-  const navItems = [
+  const allItems: { label: string; href: string; icon: any; isExternal?: boolean; adminOnly?: boolean }[] = [
     { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
+    { label: 'Teachers', href: '/admin/teachers', icon: Users, adminOnly: true },
     { label: 'Student Registration', href: '/admin/students', icon: UserPlus },
     { label: 'Live Display', href: '/admin/attendees', icon: MonitorPlay },
     { label: 'Take Attendance', href: '/kiosk', icon: QrCode, isExternal: true },
     { label: 'Attendance Records', href: '/admin/attendance', icon: ClipboardList },
     { label: 'Export Attendance Details', href: '/admin/exports', icon: Download },
-    { label: 'Event Settings', href: '/admin/event', icon: Settings },
-    { label: 'Sync Status', href: '/admin/sync', icon: RefreshCw },
-    { label: 'Audit Log', href: '/admin/audit', icon: History },
+    { label: 'Event Settings', href: '/admin/event', icon: Settings, adminOnly: true },
+    { label: 'Sync Status', href: '/admin/sync', icon: RefreshCw, adminOnly: true },
+    { label: 'Audit Log', href: '/admin/audit', icon: History, adminOnly: true },
   ];
+  // Teachers get the same dashboard, minus the pages that change global settings or other people's data
+  const navItems = allItems.filter((item) => !item.adminOnly || role !== 'teacher');
 
   return (
     <aside className="w-64 bg-[#142D4E] text-white flex flex-col shrink-0 min-h-screen border-r border-[#0B1B30] select-none">

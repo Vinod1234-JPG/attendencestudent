@@ -5,6 +5,7 @@ import {
   AdminIdentity,
   DEV_SESSION_COOKIE,
   getSupabaseAdmin,
+  isAdminRole,
   isPlaceholderMode,
   verifyDevSession,
 } from './adminSession';
@@ -41,23 +42,46 @@ export async function getCurrentAdmin(): Promise<AdminIdentity | null> {
   }
 }
 
+type GuardResult =
+  | { admin: AdminIdentity; response?: undefined }
+  | { admin?: undefined; response: NextResponse };
+
 /**
- * Guard for admin-only route handlers:
+ * Guard for routes that any signed-in staff member (admin OR teacher) may use. The route must then limit
+ * what a teacher can see to their own records.
  *
- *   const auth = await requireAdmin();
+ *   const auth = await requireStaff();
  *   if (auth.response) return auth.response;
  */
-export async function requireAdmin(): Promise<
-  { admin: AdminIdentity; response?: undefined } | { admin?: undefined; response: NextResponse }
-> {
+export async function requireStaff(): Promise<GuardResult> {
   const admin = await getCurrentAdmin();
   if (!admin) {
     return {
       response: NextResponse.json(
-        { error: 'Authentication required. Please sign in as an administrator.' },
+        { error: 'Authentication required. Please sign in.' },
         { status: 401, headers: { 'Cache-Control': 'no-store' } }
       ),
     };
   }
   return { admin };
+}
+
+/**
+ * Guard for admin-only route handlers (teachers get 403):
+ *
+ *   const auth = await requireAdmin();
+ *   if (auth.response) return auth.response;
+ */
+export async function requireAdmin(): Promise<GuardResult> {
+  const staff = await requireStaff();
+  if (staff.response) return staff;
+  if (!isAdminRole(staff.admin.role)) {
+    return {
+      response: NextResponse.json(
+        { error: 'This action is for administrators only.' },
+        { status: 403, headers: { 'Cache-Control': 'no-store' } }
+      ),
+    };
+  }
+  return staff;
 }

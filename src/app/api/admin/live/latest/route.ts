@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { requireAdmin } from '@/lib/auth/requireAdmin';
+import { requireStaff } from '@/lib/auth/requireAdmin';
+import { isTeacher } from '@/lib/auth/staffScope';
 import { isPlaceholderMode } from '@/lib/auth/adminSession';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getDevStorage } from '@/lib/db/devStore';
@@ -12,9 +13,11 @@ export const revalidate = 0;
 const NO_STORE = { 'Cache-Control': 'no-store, no-cache, must-revalidate' };
 
 /** The newest student registration (that has a photo) for the active event, or null. */
-export async function GET() {
-  const auth = await requireAdmin();
+export async function GET(request: Request) {
+  const auth = await requireStaff();
   if (auth.response) return auth.response;
+
+  const scopeAll = new URL(request.url).searchParams.get('scope') === 'all' && !isTeacher(auth.admin);
 
   try {
     if (isPlaceholderMode()) {
@@ -50,22 +53,36 @@ export async function GET() {
       return NextResponse.json({ success: true, registration: null }, { headers: NO_STORE });
     }
 
-    const { data, error } = await admin
-      .from('attendance_records')
-      .select(
-        `
+    const buildQuery = (filter: 'none' | 'mine' | 'own') => {
+      let q: any = admin
+        .from('attendance_records')
+        .select(
+          `
         person_id,
         captured_at_device,
         received_at_server,
         people!inner ( id, name, college, category ),
         attendance_photos!inner ( storage_object_key )
       `
-      )
-      .in('session_id', sessionIds)
-      .eq('people.category', 'student')
-      .order('captured_at_device', { ascending: false })
-      .order('received_at_server', { ascending: false })
-      .limit(1);
+        )
+        .in('session_id', sessionIds)
+        .eq('people.category', 'student');
+      const me = auth.admin.id as string;
+      // teachers: only their own; admins: their own plus anonymous kiosk registrations (scope=all shows everyone)
+      if (filter === 'mine') q = q.eq('registered_by', me);
+      if (filter === 'own') q = q.or(`registered_by.eq.${me},registered_by.is.null`);
+      return q
+        .order('captured_at_device', { ascending: false })
+        .order('received_at_server', { ascending: false })
+        .limit(1);
+    };
+
+    const mode = isTeacher(auth.admin) ? 'mine' : scopeAll ? 'none' : 'own';
+    let { data, error } = await buildQuery(mode);
+    // Database not migrated for teachers yet (no registered_by column): admins simply see everything.
+    if (error && (error as any).code === '42703' && mode !== 'mine') {
+      ({ data, error } = await buildQuery('none'));
+    }
 
     if (error) {
       console.error('Live latest query failed:', error.message);

@@ -13,6 +13,13 @@ export const DEV_SESSION_COOKIE = 'mrf_admin_session';
 export const DEV_SESSION_MAX_AGE_SECONDS = 60 * 60 * 12; // 12 hours
 
 export const ADMIN_ROLES = ['admin', 'super_admin'] as const;
+/** Everyone who may sign in to the dashboard: admins and teachers. */
+export const STAFF_ROLES = ['admin', 'super_admin', 'teacher'] as const;
+
+/** Admins manage everything; teachers only see the students they registered. */
+export function isAdminRole(role: string | null | undefined): boolean {
+  return role === 'admin' || role === 'super_admin';
+}
 
 export interface AdminIdentity {
   id: string | null;
@@ -26,7 +33,7 @@ export function isPlaceholderMode(): boolean {
   return !url || url.includes('placeholder') || url.includes('your-project-id');
 }
 
-/** Resolves the signed-in Supabase user and confirms they hold an admin role. */
+/** Resolves the signed-in Supabase user and confirms they hold a staff role (admin or teacher). */
 export async function getSupabaseAdmin(supabase: SupabaseClient): Promise<AdminIdentity | null> {
   const {
     data: { user },
@@ -52,7 +59,7 @@ export async function getSupabaseAdmin(supabase: SupabaseClient): Promise<AdminI
     profile = (await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()).data;
   }
 
-  if (!profile || !(ADMIN_ROLES as readonly string[]).includes(profile.role)) return null;
+  if (!profile || !(STAFF_ROLES as readonly string[]).includes(profile.role)) return null;
 
   return { id: user.id, email: user.email || '', role: profile.role, mode: 'supabase' };
 }

@@ -3,14 +3,15 @@ import { unstable_noStore as noStore } from 'next/cache';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getDevStorage, removeDevAttendanceRecord } from '@/lib/db/devStore';
 import { recordAuditLog } from '@/lib/utils/audit';
-import { requireAdmin } from '@/lib/auth/requireAdmin';
+import { requireStaff } from '@/lib/auth/requireAdmin';
+import { isTeacher } from '@/lib/auth/staffScope';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 export const fetchCache = 'force-no-store';
 
 export async function GET(request: Request) {
-  const auth = await requireAdmin();
+  const auth = await requireStaff();
   if (auth.response) return auth.response;
 
   noStore();
@@ -103,6 +104,11 @@ export async function GET(request: Request) {
 
     if (category && (category === 'guide' || category === 'phd_scholar' || category === 'student')) {
       query = query.eq('people.category', category);
+    }
+
+    // Teachers only see the check-ins they recorded
+    if (isTeacher(auth.admin)) {
+      query = query.eq('registered_by', auth.admin.id as string);
     }
 
     if (search.trim()) {
@@ -210,7 +216,7 @@ export async function GET(request: Request) {
  * Resets the attendee's status back to Not Attended (Pending).
  */
 export async function DELETE(request: Request) {
-  const auth = await requireAdmin();
+  const auth = await requireStaff();
   if (auth.response) return auth.response;
 
   noStore();
@@ -267,6 +273,11 @@ export async function DELETE(request: Request) {
       query = query.eq('id', id);
     } else if (personId) {
       query = query.eq('person_id', personId);
+    }
+
+    // A teacher can only revoke their own check-ins
+    if (isTeacher(auth.admin)) {
+      query = query.eq('registered_by', auth.admin.id as string);
     }
 
     const { data: records, error: findErr } = await query;

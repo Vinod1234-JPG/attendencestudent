@@ -17,7 +17,8 @@ export default async function AdminLayout({
   return (
     <AdminShell
       userEmail={admin?.email || ''}
-      userRole={admin?.role === 'super_admin' ? 'Super Administrator' : 'Administrator'}
+      userRole={admin.role === 'super_admin' ? 'Super Administrator' : admin.role === 'teacher' ? 'Teacher' : 'Administrator'}
+      role={admin.role}
     >
       {children}
     </AdminShell>

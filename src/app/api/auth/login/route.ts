@@ -6,7 +6,7 @@ import { recordAuditLog } from '@/lib/utils/audit';
 import { CONFIG_HELP, SupabaseConfigError } from '@/lib/supabase/config';
 import { ADMIN_CACHE_COOKIE, adminCacheCookieOptions, signAdminCache } from '@/lib/auth/adminCache';
 import {
-  ADMIN_ROLES,
+  STAFF_ROLES,
   DEV_SESSION_COOKIE,
   DEV_SESSION_MAX_AGE_SECONDS,
   isDevLoginConfigured,
@@ -130,7 +130,7 @@ export async function POST(request: Request) {
       .eq('id', data.user.id)
       .maybeSingle();
 
-    if (!profile || !(ADMIN_ROLES as readonly string[]).includes(profile.role)) {
+    if (!profile || !(STAFF_ROLES as readonly string[]).includes(profile.role)) {
       await supabase.auth.signOut();
       await recordAuditLog({
         actorId: data.user.id,
@@ -141,7 +141,7 @@ export async function POST(request: Request) {
         metadata: { email: data.user.email, reason: 'no_admin_profile' },
       });
       return NextResponse.json(
-        { error: 'Access denied: User is not authorized as an MRF administrator.' },
+        { error: 'Access denied: this account has no dashboard access.' },
         { status: 403 }
       );
     }

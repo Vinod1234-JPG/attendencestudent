@@ -54,8 +54,17 @@ export default function KioskPage() {
   const [isSavedOffline, setIsSavedOffline] = useState<boolean>(false);
   const [resetCountdown, setResetCountdown] = useState<number>(8);
   const [offlineReady, setOfflineReady] = useState<boolean>(false);
+  // Who is signed in on this browser: their registrations appear on their own Live Display
+  const [operator, setOperator] = useState<{ name: string; role: string } | null>(null);
 
   const resetTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    fetch('/api/kiosk/operator', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setOperator(d?.operator ?? null))
+      .catch(() => setOperator(null));
+  }, []);
 
   // Monitor network and offline readiness (a cached open session is all a kiosk needs)
   useEffect(() => {
@@ -306,6 +315,15 @@ export default function KioskPage() {
 
         {/* Live Status Pills */}
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          {operator && (
+            <div
+              className="hidden md:flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border border-[#2864B4]/30 bg-[#EAF2FC] text-[#142D4E]"
+              title="Students registered on this kiosk appear on this person's Live Display"
+            >
+              <UserCheck className="w-3.5 h-3.5 text-[#2864B4]" />
+              <span>Registering as {operator.name}</span>
+            </div>
+          )}
           <Link
             href="/kiosk/ready"
             aria-label={offlineReady ? 'Offline ready' : 'Prepare offline'}

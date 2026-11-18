@@ -1,4 +1,5 @@
-import { requireAdmin } from '@/lib/auth/requireAdmin';
+import { requireStaff } from '@/lib/auth/requireAdmin';
+import { canSeeRegistration, isTeacher } from '@/lib/auth/staffScope';
 import { onRegistration, onReset } from '@/lib/live-bus';
 
 export const runtime = 'nodejs';
@@ -7,8 +8,10 @@ export const maxDuration = 60; // serverless hosts end long streams; the browser
 
 /** Server-Sent Events: pushes each new student registration to the Live Display. */
 export async function GET(request: Request) {
-  const auth = await requireAdmin();
+  const auth = await requireStaff();
   if (auth.response) return auth.response;
+  const staff = auth.admin;
+  const scope = new URL(request.url).searchParams.get('scope') === 'all' && !isTeacher(staff) ? 'all' : 'own';
 
   const encoder = new TextEncoder();
   let cleanup: () => void = () => {};
@@ -26,6 +29,8 @@ export async function GET(request: Request) {
       };
 
       const unsubscribe = onRegistration((registration) => {
+        // each teacher's display only receives the students that teacher registered
+        if (!canSeeRegistration(staff, registration.ownerId, scope)) return;
         write(`event: registration\ndata: ${JSON.stringify(registration)}\n\n`);
       });
       const unsubscribeReset = onReset(() => write('event: reset\ndata: {}\n\n'));

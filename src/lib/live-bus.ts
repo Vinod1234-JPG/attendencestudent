@@ -14,6 +14,8 @@ export interface LiveRegistration {
   college: string;
   photoUrl: string;
   capturedAt: string;
+  /** Who registered the student (admin or teacher id). null/undefined = nobody was signed in at the kiosk. */
+  ownerId?: string | null;
 }
 
 const EVENT = 'registration.created';

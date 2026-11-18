@@ -12,6 +12,10 @@ interface Registration {
   capturedAt: string;
 }
 
+// Admins can open /admin/attendees?scope=all to see every teacher's registrations on one screen.
+const scopeParam = () =>
+  typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('scope') === 'all' ? 'scope=all' : '';
+
 const time = (r: Registration) => {
   const t = Date.parse(r.capturedAt);
   return Number.isNaN(t) ? Number.POSITIVE_INFINITY : t;
@@ -349,7 +353,7 @@ export default function LiveDisplayPage() {
   const fetchLatest = useCallback(async () => {
     const startedAt = Date.now();
     try {
-      const res = await fetch(`/api/admin/live/latest?_t=${Date.now()}`, { cache: 'no-store' });
+      const res = await fetch(`/api/admin/live/latest?${scopeParam()}&_t=${Date.now()}`, { cache: 'no-store' });
       if (res.status === 401) {
         window.location.href = '/login?next=/admin/attendees';
         return;
@@ -368,7 +372,7 @@ export default function LiveDisplayPage() {
 
     let es: EventSource | null = null;
     try {
-      es = new EventSource('/api/admin/live/stream');
+      es = new EventSource(`/api/admin/live/stream?${scopeParam()}`);
       es.addEventListener('ready', () => fetchLatest());
       es.addEventListener('reset', () => clearScreen());
       es.addEventListener('registration', (e) => {

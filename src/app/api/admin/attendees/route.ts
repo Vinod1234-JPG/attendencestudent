@@ -2,14 +2,15 @@ import { NextResponse } from 'next/server';
 import { unstable_noStore as noStore } from 'next/cache';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getDevStorage } from '@/lib/db/devStore';
-import { requireAdmin } from '@/lib/auth/requireAdmin';
+import { requireAdmin, requireStaff } from '@/lib/auth/requireAdmin';
+import { isTeacher } from '@/lib/auth/staffScope';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 export const fetchCache = 'force-no-store';
 
 export async function GET(request: Request) {
-  const auth = await requireAdmin();
+  const auth = await requireStaff();
   if (auth.response) return auth.response;
 
   noStore();
@@ -18,6 +19,8 @@ export async function GET(request: Request) {
     const categoryFilter = searchParams.get('category') || '';
     const statusFilter = searchParams.get('status') || '';
     const search = (searchParams.get('search') || '').trim().toLowerCase();
+    // Teachers only ever see the students they registered.
+    const onlyMine = isTeacher(auth.admin) ? auth.admin.id : null;
 
     const isPlaceholder =
       !process.env.NEXT_PUBLIC_SUPABASE_URL ||
@@ -96,11 +99,15 @@ export async function GET(request: Request) {
 
     // Lightweight mode for the dashboard: totals only, three tiny count queries instead of the full list.
     if (searchParams.get('summary') === '1') {
-      const [all, students, attended] = await Promise.all([
-        admin.from('people').select('*', { count: 'exact', head: true }),
-        admin.from('people').select('*', { count: 'exact', head: true }).eq('category', 'student'),
-        admin.from('attendance_records').select('*', { count: 'exact', head: true }),
-      ]);
+      let qAll = admin.from('people').select('*', { count: 'exact', head: true });
+      let qStudents = admin.from('people').select('*', { count: 'exact', head: true }).eq('category', 'student');
+      let qAttended = admin.from('attendance_records').select('*', { count: 'exact', head: true });
+      if (onlyMine) {
+        qAll = qAll.eq('registered_by', onlyMine);
+        qStudents = qStudents.eq('registered_by', onlyMine);
+        qAttended = qAttended.eq('registered_by', onlyMine);
+      }
+      const [all, students, attended] = await Promise.all([qAll, qStudents, qAttended]);
       const total = all.count || 0;
       return NextResponse.json(
         {
@@ -117,12 +124,15 @@ export async function GET(request: Request) {
     }
 
     // 1 + 2. Fetch all registered people and all attendance records (with photos) at the same time
-    const [peopleRes, attendanceRes] = await Promise.all([
-      admin.from('people').select('*'),
-      admin
-        .from('attendance_records')
-        .select('id, person_id, captured_at_device, status, attendance_photos(storage_object_key)'),
-    ]);
+    let peopleQuery = admin.from('people').select('*');
+    let attendanceQuery = admin
+      .from('attendance_records')
+      .select('id, person_id, captured_at_device, status, attendance_photos(storage_object_key)');
+    if (onlyMine) {
+      peopleQuery = peopleQuery.eq('registered_by', onlyMine);
+      attendanceQuery = attendanceQuery.eq('registered_by', onlyMine);
+    }
+    const [peopleRes, attendanceRes] = await Promise.all([peopleQuery, attendanceQuery]);
     const { data: peopleRaw, error: peopleErr } = peopleRes;
     const { data: attendanceRaw } = attendanceRes;
 

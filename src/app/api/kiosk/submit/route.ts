@@ -6,6 +6,7 @@ import { isPlaceholderMode } from '@/lib/auth/adminSession';
 import { cleanDisplayText, validateStudentDetails } from '@/lib/utils/normalization';
 import { findOrCreateDevStudent, findOrCreateStudent, findStudent } from '@/lib/students/findOrCreateStudent';
 import { emitRegistration } from '@/lib/live-bus';
+import { getCurrentAdmin } from '@/lib/auth/requireAdmin';
 
 export const dynamic = 'force-dynamic';
 
@@ -93,6 +94,7 @@ export async function POST(request: Request) {
         college: person.college || college,
         photoUrl: devRecord.photo.signed_url,
         capturedAt: devRecord.captured_at_device,
+        ownerId: null,
       });
 
       return NextResponse.json({
@@ -110,6 +112,10 @@ export async function POST(request: Request) {
     // ------------------------------------------------------------------
     const admin = createAdminClient();
 
+    // Who is operating this kiosk? A teacher/admin signed in on this browser owns the registration.
+    const operator = await getCurrentAdmin().catch(() => null);
+    const registeredBy = operator?.id ?? null;
+
     // The session check and the student lookup do not depend on each other: run them together.
     const [{ data: session, error: sessErr }, existingStudent] = await Promise.all([
       admin.from('event_sessions').select('id, name, status, event_id').eq('id', sessionId).single(),
@@ -124,7 +130,7 @@ export async function POST(request: Request) {
     }
 
     // Only register a first-time student once we know the session is open.
-    const person = existingStudent ?? (await findOrCreateStudent(admin, studentName, college));
+    const person = existingStudent ?? (await findOrCreateStudent(admin, studentName, college, registeredBy));
     const personId = person.id;
 
     if (person.created) {
@@ -183,19 +189,26 @@ export async function POST(request: Request) {
       console.warn('Storage upload error:', uploadErr.message);
     }
 
-    const { data: newRecord, error: insertErr } = await admin
-      .from('attendance_records')
-      .insert({
-        session_id: sessionId,
-        person_id: personId,
-        operation_id: operationId,
-        captured_at_device: capturedAtDevice || nowIso,
-        received_at_server: nowIso,
-        recorded_at_server: nowIso,
-        status: 'confirmed',
-      })
-      .select('id, session_id, person_id, captured_at_device')
-      .single();
+    const recordFields = {
+      session_id: sessionId,
+      person_id: personId,
+      operation_id: operationId,
+      captured_at_device: capturedAtDevice || nowIso,
+      received_at_server: nowIso,
+      recorded_at_server: nowIso,
+      status: 'confirmed',
+    };
+    const insertRecord = (extra: Record<string, unknown>) =>
+      admin
+        .from('attendance_records')
+        .insert({ ...recordFields, ...extra })
+        .select('id, session_id, person_id, captured_at_device')
+        .single();
+    let { data: newRecord, error: insertErr } = await insertRecord(registeredBy ? { registered_by: registeredBy } : {});
+    // The teachers migration (00004) has not been run yet: still record the check-in, just without an owner.
+    if (insertErr?.code === '42703' && registeredBy) {
+      ({ data: newRecord, error: insertErr } = await insertRecord({}));
+    }
 
     if (insertErr || !newRecord) {
       // 23505: another kiosk recorded the same student at the same moment.
@@ -251,6 +264,7 @@ export async function POST(request: Request) {
         college: person.college,
         photoUrl: `/api/attendance/photo?key=${encodeURIComponent(storageKey)}`,
         capturedAt: newRecord.captured_at_device,
+        ownerId: registeredBy,
       });
     }
 

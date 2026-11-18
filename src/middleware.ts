@@ -5,6 +5,7 @@ import {
   AdminIdentity,
   DEV_SESSION_COOKIE,
   getSupabaseAdmin,
+  isAdminRole,
   isPlaceholderMode,
   verifyDevSession,
 } from '@/lib/auth/adminSession';
@@ -31,6 +32,28 @@ function isPublicApi(pathname: string): boolean {
   return PUBLIC_API_PREFIXES.some((p) => pathname === p || pathname.startsWith(p));
 }
 
+/** Teachers may use the dashboard, but not these (global settings, other people's data, accounts). */
+const ADMIN_ONLY_API = ['/api/admin/teachers', '/api/admin/reset-data', '/api/audit', '/api/sync/conflicts'];
+const ADMIN_ONLY_PAGES = ['/admin/teachers', '/admin/event', '/admin/audit', '/admin/sync'];
+
+function isAdminOnly(pathname: string): boolean {
+  return [...ADMIN_ONLY_API, ...ADMIN_ONLY_PAGES].some((p) => pathname === p || pathname.startsWith(p + '/'));
+}
+
+/** Response for a teacher who asked for an admin-only API or page. */
+function denyTeacher(request: NextRequest, isApi: boolean) {
+  if (isApi) {
+    return NextResponse.json(
+      { error: 'This action is for administrators only.' },
+      { status: 403, headers: { 'Cache-Control': 'no-store' } }
+    );
+  }
+  const home = request.nextUrl.clone();
+  home.pathname = '/admin';
+  home.search = '';
+  return NextResponse.redirect(home);
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isApi = pathname.startsWith('/api/');
@@ -47,7 +70,10 @@ export async function middleware(request: NextRequest) {
   } else {
     // Fast path: verified a moment ago (signed cookie). No network round trips to the database.
     const cached = await verifyAdminCache(request.cookies.get(ADMIN_CACHE_COOKIE)?.value);
-    if (cached) return response;
+    if (cached) {
+      if (!isAdminRole(cached.role) && isAdminOnly(pathname)) return denyTeacher(request, isApi);
+      return response;
+    }
 
     const supabase = createServerClient(
       getSupabaseUrl()!,
@@ -76,6 +102,7 @@ export async function middleware(request: NextRequest) {
   }
 
   if (admin) {
+    if (!isAdminRole(admin.role) && isAdminOnly(pathname)) return denyTeacher(request, isApi);
     if (!isPlaceholderMode()) {
       const value = await signAdminCache(admin);
       if (value) response.cookies.set(ADMIN_CACHE_COOKIE, value, adminCacheCookieOptions);

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { AdminSidebar } from '@/components/layout/AdminSidebar';
 import { AdminTopBar } from '@/components/layout/AdminTopBar';
 import { AppFooter } from '@/components/common/AppFooter';
@@ -13,14 +13,25 @@ import { AppFooter } from '@/components/common/AppFooter';
 export function AdminShell({
   userEmail,
   userRole,
+  role,
   children,
 }: {
   userEmail: string;
   userRole: string;
+  role: string;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
+  const router = useRouter();
+
+  // Teachers have no business on the admin-only pages (the server blocks them too); send them home.
+  useEffect(() => {
+    const adminOnly = ['/admin/teachers', '/admin/event', '/admin/audit', '/admin/sync'];
+    if (role === 'teacher' && adminOnly.some((p) => pathname === p || pathname.startsWith(p + '/'))) {
+      router.replace('/admin');
+    }
+  }, [role, pathname, router]);
 
   // Close the drawer after navigating.
   useEffect(() => setOpen(false), [pathname]);
@@ -48,7 +59,7 @@ export function AdminShell({
           open ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <AdminSidebar userEmail={userEmail} userRole={userRole} />
+        <AdminSidebar userEmail={userEmail} userRole={userRole} role={role} />
       </div>
 
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">

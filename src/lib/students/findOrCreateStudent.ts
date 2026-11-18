@@ -35,7 +35,8 @@ export async function findStudent(
 export async function findOrCreateStudent(
   admin: SupabaseClient,
   rawName: string,
-  rawCollege: string
+  rawCollege: string,
+  registeredBy: string | null = null
 ): Promise<StudentRecord> {
   const name = cleanDisplayText(rawName);
   const college = cleanDisplayText(rawCollege);
@@ -44,19 +45,23 @@ export async function findOrCreateStudent(
   const existing = await findStudent(admin, name, college);
   if (existing) return existing;
 
-  const { data: inserted, error } = await admin
-    .from('people')
-    .insert({
-      category: 'student',
-      name,
-      college,
-      student_key: studentKey,
-      normalized_email: null,
-      phd_id: null,
-      metadata: { College: college, Status: 'Self-Registered at Kiosk' },
-    })
-    .select(STUDENT_COLUMNS)
-    .single();
+  const fields = {
+    category: 'student',
+    name,
+    college,
+    student_key: studentKey,
+    normalized_email: null,
+    phd_id: null,
+    metadata: { College: college, Status: 'Self-Registered at Kiosk' },
+  };
+  const insertStudent = (extra: Record<string, unknown>) =>
+    admin.from('people').insert({ ...fields, ...extra }).select(STUDENT_COLUMNS).single();
+
+  // registered_by is only written when someone was signed in, and skipped if the teachers migration is missing
+  let { data: inserted, error } = await insertStudent(registeredBy ? { registered_by: registeredBy } : {});
+  if (error?.code === '42703' && registeredBy) {
+    ({ data: inserted, error } = await insertStudent({}));
+  }
 
   if (inserted) return { ...(inserted as any), category: 'student', created: true };
 

@@ -4,6 +4,7 @@ import { recordAuditLog } from '@/lib/utils/audit';
 import { cleanDisplayText, validateStudentDetails } from '@/lib/utils/normalization';
 import { findOrCreateStudent } from '@/lib/students/findOrCreateStudent';
 import { emitRegistration } from '@/lib/live-bus';
+import { getCurrentAdmin } from '@/lib/auth/requireAdmin';
 
 export async function POST(request: Request) {
   try {
@@ -27,6 +28,9 @@ export async function POST(request: Request) {
     }
 
     const admin = createAdminClient();
+    // The teacher/admin signed in on the kiosk browser that is uploading owns these registrations.
+    const operator = await getCurrentAdmin().catch(() => null);
+    const registeredBy = operator?.id ?? null;
 
     // Students captured offline have no record yet: register them now.
     if (!personId) {
@@ -34,7 +38,7 @@ export async function POST(request: Request) {
       if (invalid) {
         return NextResponse.json({ error: invalid }, { status: 400 });
       }
-      personId = (await findOrCreateStudent(admin, studentName, college)).id;
+      personId = (await findOrCreateStudent(admin, studentName, college, registeredBy)).id;
     }
     const nowIso = new Date().toISOString();
 
@@ -160,19 +164,22 @@ export async function POST(request: Request) {
     }
 
     // 5. Insert Attendance Record
-    const { data: record, error: insertErr } = await admin
-      .from('attendance_records')
-      .insert({
-        session_id: sessionId,
-        person_id: personId,
-        operation_id: operationId,
-        captured_at_device: capturedAtDevice,
-        received_at_server: nowIso,
-        recorded_at_server: nowIso,
-        status: 'confirmed',
-      })
-      .select('id')
-      .single();
+    const recordFields = {
+      session_id: sessionId,
+      person_id: personId,
+      operation_id: operationId,
+      captured_at_device: capturedAtDevice,
+      received_at_server: nowIso,
+      recorded_at_server: nowIso,
+      status: 'confirmed',
+    };
+    const insertRecord = (extra: Record<string, unknown>) =>
+      admin.from('attendance_records').insert({ ...recordFields, ...extra }).select('id').single();
+    let { data: record, error: insertErr } = await insertRecord(registeredBy ? { registered_by: registeredBy } : {});
+    // The teachers migration (00004) has not been run yet: still record the check-in, just without an owner.
+    if (insertErr?.code === '42703' && registeredBy) {
+      ({ data: record, error: insertErr } = await insertRecord({}));
+    }
 
     if (insertErr || !record) {
       if (
@@ -229,6 +236,7 @@ export async function POST(request: Request) {
           college: who.college || '',
           photoUrl: `/api/attendance/photo?key=${encodeURIComponent(storageKey)}`,
           capturedAt: capturedAtDevice,
+          ownerId: registeredBy,
         });
       }
     }
