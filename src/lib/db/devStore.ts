@@ -152,6 +152,11 @@ export function clearDevData(): { people: number; attendance: number } {
   return removed;
 }
 
+/** Overwrites the local development store (used when deleting chosen students). */
+export function replaceDevData(data: { people: DevPerson[]; attendanceRecords: DevAttendeeRecord[] }) {
+  saveStorage({ people: data.people, attendanceRecords: data.attendanceRecords } as DevStorage);
+}
+
 export function addDevPeople(newPeople: DevPerson[]) {
   const store = loadStorage();
   const existingMap = new Map(store.people.map((p) => [p.id, p]));

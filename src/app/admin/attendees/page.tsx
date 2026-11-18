@@ -260,7 +260,20 @@ export default function LiveDisplayPage() {
         return;
       }
       const data = await res.json().catch(() => null);
-      if (res.ok && data?.registration) apply(data.registration as Registration);
+      const latest = data?.registration as Registration | null | undefined;
+      const shown = currentRef.current;
+      if (
+        res.ok &&
+        latest &&
+        shown &&
+        latest.attendeeId !== shown.attendeeId &&
+        time(latest) < time(shown) &&
+        startedAt > lastShownAt.current
+      ) {
+        // The student on screen is no longer the newest one in the database: they were deleted.
+        clearScreen();
+        apply(latest);
+      } else if (res.ok && latest) apply(latest);
       else if (res.ok && data && data.registration === null && startedAt > lastShownAt.current) clearScreen(); // all data was removed (ignore a reply that was already stale)
     } catch {
       // network hiccup: the next poll or stream event will catch up
@@ -275,7 +288,10 @@ export default function LiveDisplayPage() {
     try {
       es = new EventSource(`/api/admin/live/stream?${scopeParam()}`);
       es.addEventListener('ready', () => fetchLatest());
-      es.addEventListener('reset', () => clearScreen());
+      es.addEventListener('reset', () => {
+        clearScreen();
+        fetchLatest(); // some students may remain after deleting only a few
+      });
       es.addEventListener('registration', (e) => {
         try {
           apply(JSON.parse((e as MessageEvent).data));

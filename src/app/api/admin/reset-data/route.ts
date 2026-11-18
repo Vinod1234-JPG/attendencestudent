@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { unstable_noStore as noStore } from 'next/cache';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { recordAuditLog } from '@/lib/utils/audit';
-import { clearDevData, getDevStorage } from '@/lib/db/devStore';
+import { clearDevData, getDevStorage, replaceDevData } from '@/lib/db/devStore';
 import { requireAdmin } from '@/lib/auth/requireAdmin';
 import { isPlaceholderMode } from '@/lib/auth/adminSession';
 import { emitReset } from '@/lib/live-bus';
@@ -15,13 +15,85 @@ export const fetchCache = 'force-no-store';
 const BUCKET = 'mrf-attendance-photos';
 const NIL_UUID = '00000000-0000-0000-0000-000000000000';
 
-/** Counts of everything "Remove all data" would delete. */
-export async function GET() {
+export interface StudentRow {
+  id: string;
+  name: string;
+  college: string;
+  registeredAt: string | null;
+  checkIns: number;
+  photos: number;
+}
+
+const MAX_LIST = 5000;
+const CHUNK = 100; // ids per ".in()" filter, keeps the request URL short
+
+function chunks<T>(list: T[]): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < list.length; i += CHUNK) out.push(list.slice(i, i + CHUNK));
+  return out;
+}
+
+/** Every student, newest first, with how many check-ins and photos each one has. */
+async function listStudents(): Promise<StudentRow[]> {
+  if (isPlaceholderMode()) {
+    const dev = getDevStorage();
+    return dev.people
+      .map((p) => {
+        const recs = dev.attendanceRecords.filter((r) => r.attendee.id === p.id);
+        return {
+          id: p.id,
+          name: p.name,
+          college: p.college || '',
+          registeredAt: p.created_at || null,
+          checkIns: recs.length,
+          photos: recs.filter((r) => r.photo?.available).length,
+        };
+      })
+      .sort((a, b) => String(b.registeredAt).localeCompare(String(a.registeredAt)));
+  }
+
+  const admin = createAdminClient();
+  const [peopleRes, recordsRes, photosRes] = await Promise.all([
+    admin.from('people').select('id, name, college, created_at').order('created_at', { ascending: false }).limit(MAX_LIST),
+    admin.from('attendance_records').select('id, person_id').limit(100000),
+    admin.from('attendance_photos').select('attendance_record_id').limit(100000),
+  ]);
+  if (peopleRes.error) throw new Error(peopleRes.error.message);
+
+  const recordOwner = new Map<string, string>();
+  const checkIns = new Map<string, number>();
+  for (const r of (recordsRes.data || []) as any[]) {
+    recordOwner.set(r.id, r.person_id);
+    checkIns.set(r.person_id, (checkIns.get(r.person_id) || 0) + 1);
+  }
+  const photos = new Map<string, number>();
+  for (const ph of (photosRes.data || []) as any[]) {
+    const owner = recordOwner.get(ph.attendance_record_id);
+    if (owner) photos.set(owner, (photos.get(owner) || 0) + 1);
+  }
+
+  return (peopleRes.data || []).map((p: any) => ({
+    id: p.id,
+    name: p.name,
+    college: p.college || '',
+    registeredAt: p.created_at || null,
+    checkIns: checkIns.get(p.id) || 0,
+    photos: photos.get(p.id) || 0,
+  }));
+}
+
+/** Counts of everything "Remove all data" would delete (and, with ?list=1, the students themselves). */
+export async function GET(request: Request) {
   const auth = await requireAdmin();
   if (auth.response) return auth.response;
 
   noStore();
   try {
+    if (new URL(request.url).searchParams.get('list') === '1') {
+      const students = await listStudents();
+      return NextResponse.json({ success: true, students, truncated: students.length >= MAX_LIST });
+    }
+
     if (isPlaceholderMode()) {
       const dev = getDevStorage();
       return NextResponse.json({
@@ -92,6 +164,100 @@ async function removeAllPhotoObjects(admin: ReturnType<typeof createAdminClient>
 }
 
 /**
+ * Removes only the chosen students, together with their attendance records and photos (database rows and
+ * the photo files in storage).
+ */
+async function deleteSelected(rawIds: unknown) {
+  const ids = Array.from(
+    new Set(
+      (Array.isArray(rawIds) ? rawIds : []).filter(
+        (x): x is string => typeof x === 'string' && x.length > 0 && x.length < 100
+      )
+    )
+  );
+  if (ids.length === 0) {
+    return NextResponse.json({ error: 'Select at least one student to delete.' }, { status: 400 });
+  }
+
+  if (isPlaceholderMode()) {
+    const store = getDevStorage();
+    const chosen = new Set(ids);
+    const recs = store.attendanceRecords.filter((r) => chosen.has(r.attendee.id));
+    const people = store.people.filter((p) => chosen.has(p.id)).length;
+    replaceDevData({
+      people: store.people.filter((p) => !chosen.has(p.id)),
+      attendanceRecords: store.attendanceRecords.filter((r) => !chosen.has(r.attendee.id)),
+    });
+    emitReset();
+    return NextResponse.json({
+      success: true,
+      deleted: { people, attendance_records: recs.length, photo_files: recs.filter((r) => r.photo?.available).length },
+    });
+  }
+
+  const admin = createAdminClient();
+
+  // Find their attendance records and photo files first.
+  const recordIds: string[] = [];
+  for (const part of chunks(ids)) {
+    const { data, error } = await admin.from('attendance_records').select('id').in('person_id', part);
+    if (error) return NextResponse.json({ error: `Could not read attendance records: ${error.message}` }, { status: 500 });
+    for (const r of (data || []) as any[]) recordIds.push(r.id);
+  }
+  const photoKeys: string[] = [];
+  for (const part of chunks(recordIds)) {
+    const { data } = await admin.from('attendance_photos').select('storage_object_key').in('attendance_record_id', part);
+    for (const ph of (data || []) as any[]) if (ph.storage_object_key) photoKeys.push(ph.storage_object_key);
+  }
+
+  const fail = async (label: string, message: string) => {
+    await recordAuditLog({
+      action: 'STUDENTS_DELETED',
+      entityType: 'PERSON',
+      outcome: 'failure',
+      metadata: { failed_step: label, error: message, requested: ids.length },
+    });
+    return NextResponse.json({ error: `Could not remove ${label}: ${message}` }, { status: 500 });
+  };
+
+  // Children first (foreign keys), then the students.
+  for (const part of chunks(recordIds)) {
+    const { error } = await admin.from('attendance_photos').delete().in('attendance_record_id', part);
+    if (error) return fail('photo records', error.message);
+  }
+  for (const part of chunks(recordIds)) {
+    const { error } = await admin.from('attendance_records').delete().in('id', part);
+    if (error) return fail('attendance records', error.message);
+  }
+  let people = 0;
+  for (const part of chunks(ids)) {
+    const { data, error } = await admin.from('people').delete().in('id', part).select('id');
+    if (error) return fail('students', error.message);
+    people += data?.length ?? 0;
+  }
+
+  let photoFiles = 0;
+  for (const part of chunks(photoKeys)) {
+    const { data, error } = await admin.storage.from(BUCKET).remove(part);
+    if (!error) photoFiles += data?.length ?? part.length;
+  }
+
+  await recordAuditLog({
+    action: 'STUDENTS_DELETED',
+    entityType: 'PERSON',
+    outcome: 'success',
+    metadata: { deleted_people: people, deleted_attendance: recordIds.length, deleted_photo_files: photoFiles },
+  });
+
+  emitReset(); // the Live Display reloads, in case it was showing one of these students
+
+  return NextResponse.json({
+    success: true,
+    deleted: { people, attendance_records: recordIds.length, attendance_photos: photoKeys.length, photo_files: photoFiles },
+  });
+}
+
+/**
  * Removes ALL students, attendance records and photos. Keeps the event, session, admin accounts and the
  * audit log (which records this action).
  */
@@ -102,6 +268,9 @@ export async function POST(request: Request) {
   noStore();
   try {
     const body = await request.json().catch(() => ({}));
+    if (body && body.confirm === 'DELETE_SELECTED') {
+      return await deleteSelected(body.ids);
+    }
     if (!body || body.confirm !== 'PURGE_ALL_DATA') {
       return NextResponse.json(
         { error: 'Confirmation required. Pass { "confirm": "PURGE_ALL_DATA" } to proceed.' },
