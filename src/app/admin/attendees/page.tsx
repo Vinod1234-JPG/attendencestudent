@@ -47,23 +47,24 @@ function Backdrop() {
         }}
       />
 
-      {/* campus photo along the bottom right, faded into the dark at its top and left edges */}
+      {/* campus photo filling the whole screen */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={CAMPUS_PHOTO}
+        alt=""
+        draggable={false}
+        className="absolute inset-0 h-full w-full select-none object-cover object-center"
+      />
+      {/* navy tint, darker on the left, so the photo, name and college stay easy to read on top of it */}
       <div
-        className="absolute bottom-0 right-0 w-[78vw]"
+        className="absolute inset-0"
         style={{
-          WebkitMaskImage:
-            'linear-gradient(to right, transparent 0%, #000 38%), linear-gradient(to bottom, transparent 0%, #000 30%)',
-          WebkitMaskComposite: 'source-in',
-          maskImage: 'linear-gradient(to right, transparent 0%, #000 38%), linear-gradient(to bottom, transparent 0%, #000 30%)',
-          maskComposite: 'intersect',
+          background: [
+            'linear-gradient(90deg, rgba(3,6,14,0.82) 0%, rgba(3,6,14,0.62) 45%, rgba(5,11,28,0.40) 100%)',
+            'linear-gradient(180deg, rgba(5,11,28,0.45) 0%, rgba(5,11,28,0.15) 50%, rgba(3,6,14,0.55) 100%)',
+          ].join(','),
         }}
-      >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={CAMPUS_PHOTO} alt="" className="block h-auto w-full select-none" draggable={false} />
-        {/* navy tint so the name and college stay easy to read on top of the photo */}
-        <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, rgba(5,11,28,0.55) 0%, rgba(5,11,28,0.35) 60%, rgba(5,11,28,0.6) 100%)' }} />
-      </div>
-      <div className="absolute inset-0" style={{ background: 'linear-gradient(90deg, rgba(3,6,14,0.55) 0%, rgba(3,6,14,0.0) 55%)' }} />
+      />
 
       {/* light streaks, top right */}
       <div className="live-streak absolute right-[3vw] top-[5vh] h-[0.55vh] w-[14vw] -skew-x-[32deg] rounded-full bg-gradient-to-r from-transparent via-sky-400/70 to-sky-300" />
