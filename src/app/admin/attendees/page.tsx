@@ -112,13 +112,13 @@ function Brand() {
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={COLLEGE_LOGO}
-        alt="MIT Mysore"
+        alt="Maharaja Institute of Technology Mysuru"
         className="aspect-square h-[max(9cqh,56px)] rounded-full bg-white object-contain p-[3px] shadow-[0_0_2.4vw_rgba(245,165,36,0.45)] ring-[0.25cqw] ring-amber-400/80"
       />
       <span className="h-[7.5cqh] w-[0.14cqw] rounded-full bg-gradient-to-b from-transparent via-amber-400 to-transparent" />
       <div className="leading-tight">
-        <div className="font-extrabold tracking-tight text-white" style={{ fontSize: 'max(3.6cqh, 18px)' }}>
-          MIT Mysore
+        <div className="font-extrabold tracking-tight text-white" style={{ fontSize: 'max(3.2cqh, 16px)' }}>
+          Maharaja Institute of Technology Mysuru
         </div>
         <div className="font-medium text-slate-200/90" style={{ fontSize: 'max(2.6cqh, 13px)' }}>
           Student Attendance Tracker
