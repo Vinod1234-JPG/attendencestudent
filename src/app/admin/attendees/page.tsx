@@ -31,6 +31,7 @@ const GOLD_LIGHT = '#FFD76A';
 // College artwork. Replace these files in /public to change the logo or the campus photo.
 const COLLEGE_LOGO = '/mitm-logo.png';
 const CAMPUS_PHOTO = '/mitm-campus.jpg';
+const DEPT_LOGO = '/mitm-cse-logo.png';
 
 /** Cinematic backdrop: navy base, gold and blue glows, campus on the right, light streaks. */
 function Backdrop() {
@@ -77,6 +78,29 @@ function Backdrop() {
         style={{ backgroundImage: 'repeating-linear-gradient(0deg, #fff 0, #fff 1px, transparent 1px, transparent 3px)' }}
       />
       <div className="absolute inset-0" style={{ boxShadow: 'inset 0 0 12vw rgba(1,3,10,0.8)' }} />
+    </div>
+  );
+}
+
+/** The CSE department lock-up shown top-right, mirroring the MIT lock-up on the left. */
+function DeptBrand() {
+  return (
+    <div className="absolute right-[3cqw] top-[3.6cqh] z-10 flex items-center gap-[1.2cqw]">
+      <div className="text-right leading-tight">
+        <div className="font-extrabold tracking-tight text-white" style={{ fontSize: 'max(3.6cqh, 18px)' }}>
+          CSE Department
+        </div>
+        <div className="font-medium text-slate-200/90" style={{ fontSize: 'max(2.6cqh, 13px)' }}>
+          Computer Science &amp; Engineering
+        </div>
+      </div>
+      <span className="h-[7.5cqh] w-[0.14cqw] rounded-full bg-gradient-to-b from-transparent via-amber-400 to-transparent" />
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={DEPT_LOGO}
+        alt="MIT Mysore Computer Science and Engineering Department"
+        className="aspect-square h-[max(9cqh,56px)] rounded-full bg-white object-contain p-[3px] shadow-[0_0_2.4vw_rgba(245,165,36,0.45)] ring-[0.25cqw] ring-amber-400/80"
+      />
     </div>
   );
 }
@@ -394,11 +418,12 @@ export default function LiveDisplayPage() {
         style={{ width: 'min(100vw, 177.78vh)', height: 'min(100vh, 56.25vw)', containerType: 'size' }}
       >
       <Brand />
+      <DeptBrand />
 
       <Link
         href="/admin"
         onClick={(e) => e.stopPropagation()}
-        className={`absolute right-[2vw] top-[2.4vh] z-20 rounded-full border border-white/15 bg-white/10 px-[1.2vw] py-[0.8vh] text-white/90 backdrop-blur transition-opacity duration-300 hover:bg-white/20 ${
+        className={`absolute right-[2vw] top-[19vh] z-20 rounded-full border border-white/15 bg-white/10 px-[1.2vw] py-[0.8vh] text-white/90 backdrop-blur transition-opacity duration-300 hover:bg-white/20 ${
           moving ? 'opacity-100' : 'pointer-events-none opacity-0'
         }`}
         style={{ fontSize: 'max(1.9vh, 12px)' }}
