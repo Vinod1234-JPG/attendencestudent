@@ -12,6 +12,15 @@ export interface SyncEngineStatus {
 
 type SyncListener = (status: SyncEngineStatus) => void;
 
+const BATCH_SIZE = 20; // check-ins per sync round
+const UPLOAD_CONCURRENCY = 3; // uploads at the same time
+const STUCK_UPLOAD_MS = 2 * 60 * 1000; // an "uploading" check-in older than this was interrupted
+
+/** Wait before retrying a failed check-in: 5 s, 10 s, 20 s ... up to 5 minutes. */
+function retryDelayMs(attempts: number): number {
+  return Math.min(5 * 60 * 1000, 5000 * 2 ** Math.max(0, attempts - 1));
+}
+
 class SyncEngine {
   private isSyncing = false;
   private listeners: Set<SyncListener> = new Set();
@@ -62,7 +71,14 @@ class SyncEngine {
     }
   }
 
-  public async triggerSync(): Promise<{ success: boolean; synced: number; failed: number }> {
+  /**
+   * Uploads queued offline check-ins.
+   * - Check-ins left "uploading" by a closed tab or crash are put back in the queue (they were never retried before).
+   * - Up to UPLOAD_CONCURRENCY uploads run at once. This is safe: the server treats a repeated operation_id as the
+   *   same check-in, so nothing can be recorded twice.
+   * - Failed check-ins wait a little longer after each failure (backoff), unless `force` (the Sync now button).
+   */
+  public async triggerSync(options: { force?: boolean } = {}): Promise<{ success: boolean; synced: number; failed: number }> {
     if (this.isSyncing || typeof window === 'undefined') {
       return { success: false, synced: 0, failed: 0 };
     }
@@ -82,14 +98,32 @@ class SyncEngine {
 
     try {
       const db = getOfflineDb();
-      // Fetch operations needing sync
-      const recordsToSync = await db.attendance_queue
+      const now = Date.now();
+
+      // 1. Recover check-ins stuck in "uploading" (the tab closed mid-upload)
+      const stuck = await db.attendance_queue.where('sync_status').equals('uploading').toArray();
+      for (const item of stuck) {
+        const last = item.last_attempted_at ? Date.parse(item.last_attempted_at) : 0;
+        if (!last || now - last > STUCK_UPLOAD_MS) {
+          await db.attendance_queue.update(item.operation_id, { sync_status: 'pending' });
+        }
+      }
+
+      // 2. Pick what to send: everything pending, and failed ones whose wait is over
+      const candidates = await db.attendance_queue
         .where('sync_status')
         .anyOf('pending', 'failed')
-        .limit(20)
+        .limit(BATCH_SIZE * 3)
         .toArray();
+      const recordsToSync = candidates
+        .filter((item) => {
+          if (options.force || item.sync_status !== 'failed') return true;
+          const last = item.last_attempted_at ? Date.parse(item.last_attempted_at) : 0;
+          return !last || now - last >= retryDelayMs(item.attempt_count);
+        })
+        .slice(0, BATCH_SIZE);
 
-      for (const item of recordsToSync) {
+      const uploadOne = async (item: OfflineAttendanceRecord) => {
         try {
           // Update status to 'uploading'
           await db.attendance_queue.update(item.operation_id, {
@@ -141,6 +175,10 @@ class SyncEngine {
           });
           failed++;
         }
+      };
+
+      for (let i = 0; i < recordsToSync.length; i += UPLOAD_CONCURRENCY) {
+        await Promise.all(recordsToSync.slice(i, i + UPLOAD_CONCURRENCY).map(uploadOne));
       }
 
       this.lastSyncAt = new Date();

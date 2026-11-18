@@ -284,6 +284,8 @@ export default function AttendanceRecordsPage() {
                             <img
                               src={r.photo.signed_url}
                               alt={r.attendee.name}
+                              loading="lazy"
+                              decoding="async"
                               className="w-full h-full object-cover"
                               onError={() =>
                                 setFailedImages((prev) => ({ ...prev, [r.id]: true }))

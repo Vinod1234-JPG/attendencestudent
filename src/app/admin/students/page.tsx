@@ -338,7 +338,7 @@ export default function StudentRegistrationPage() {
                 <div className="w-10 h-10 rounded-md overflow-hidden bg-[#EEF1F5] border border-[#E4E9F0] shrink-0 flex items-center justify-center text-[#98A2B3]">
                   {s.photo_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={s.photo_url} alt={`${s.name} check-in`} className="w-full h-full object-cover" />
+                    <img src={s.photo_url} alt={`${s.name} check-in`} loading="lazy" decoding="async" className="w-full h-full object-cover" />
                   ) : (
                     <Camera className="w-4 h-4" />
                   )}

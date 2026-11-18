@@ -124,7 +124,7 @@ export async function GET(request: Request) {
     }
 
     // 1 + 2. Fetch all registered people and all attendance records (with photos) at the same time
-    let peopleQuery = admin.from('people').select('*');
+    let peopleQuery = admin.from('people').select('id, name, category, normalized_email, phd_id, college, created_at, metadata');
     let attendanceQuery = admin
       .from('attendance_records')
       .select('id, person_id, captured_at_device, status, attendance_photos(storage_object_key)');

@@ -166,7 +166,7 @@ export async function GET(request: Request) {
 
     // Event / Room of every row, then keep only the chosen one (if any)
     const [eventRooms, myRoom] = await Promise.all([
-      getStaffEventRooms(admin),
+      getStaffEventRooms(admin, true),
       getEventRoomFor(admin, auth.admin.id as string),
     ]);
     items = items.map((r: any) => ({ ...r, event_room: resolveEventRoom(r.people?.metadata, r.registered_by, eventRooms) }));

@@ -77,7 +77,7 @@ export default function SyncStatusPage() {
   }, []);
 
   const handleSyncNow = async () => {
-    await syncEngine.triggerSync();
+    await syncEngine.triggerSync({ force: true });
     await loadQueue();
   };
 
@@ -87,7 +87,7 @@ export default function SyncStatusPage() {
       sync_status: 'pending',
       last_error: null,
     });
-    await syncEngine.triggerSync();
+    await syncEngine.triggerSync({ force: true });
     await loadQueue();
   };
 

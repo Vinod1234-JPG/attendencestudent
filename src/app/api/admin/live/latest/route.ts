@@ -12,6 +12,23 @@ export const revalidate = 0;
 
 const NO_STORE = { 'Cache-Control': 'no-store, no-cache, must-revalidate' };
 
+// The active event's session ids change rarely, but every Live Display asks every 5 seconds. Remember them briefly
+// so each poll is one database query instead of three.
+const SESSIONS_TTL_MS = 30_000;
+let sessionsCache: { ids: string[]; at: number } | null = null;
+
+async function activeSessionIds(admin: ReturnType<typeof createAdminClient>): Promise<string[]> {
+  if (sessionsCache && Date.now() - sessionsCache.at < SESSIONS_TTL_MS) return sessionsCache.ids;
+  const { data: event } = await admin.from('events').select('id').eq('status', 'active').maybeSingle();
+  let ids: string[] = [];
+  if (event) {
+    const { data: sessions } = await admin.from('event_sessions').select('id').eq('event_id', event.id);
+    ids = (sessions || []).map((s: any) => s.id);
+  }
+  sessionsCache = { ids, at: Date.now() };
+  return ids;
+}
+
 /** The newest student registration (that has a photo) for the active event, or null. */
 export async function GET(request: Request) {
   const auth = await requireStaff();
@@ -44,11 +61,7 @@ export async function GET(request: Request) {
     const admin = createAdminClient();
 
     // Sessions of the active event
-    const { data: event } = await admin.from('events').select('id').eq('status', 'active').maybeSingle();
-    if (!event) return NextResponse.json({ success: true, registration: null }, { headers: NO_STORE });
-
-    const { data: sessions } = await admin.from('event_sessions').select('id').eq('event_id', event.id);
-    const sessionIds = (sessions || []).map((s: any) => s.id);
+    const sessionIds = await activeSessionIds(admin);
     if (sessionIds.length === 0) {
       return NextResponse.json({ success: true, registration: null }, { headers: NO_STORE });
     }

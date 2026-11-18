@@ -132,7 +132,9 @@ export async function POST(request: Request) {
     }
 
     // Only register a first-time student once we know the session is open.
-    const person = existingStudent ?? (await findOrCreateStudent(admin, studentName, college, registeredBy, eventRoom));
+    const person =
+      existingStudent ??
+      (await findOrCreateStudent(admin, studentName, college, registeredBy, eventRoom, { alreadyLookedUp: true }));
     const personId = person.id;
 
     if (person.created) {
@@ -145,12 +147,16 @@ export async function POST(request: Request) {
       });
     }
 
-    const { data: existingRecord } = await admin
-      .from('attendance_records')
-      .select('id, operation_id, captured_at_device')
-      .eq('session_id', sessionId)
-      .eq('person_id', personId)
-      .maybeSingle();
+    // A student registered in this very request cannot have a check-in yet. For returning students the database
+    // unique rule (uq_session_person) is the final guard either way; this lookup gives the friendly answers.
+    const { data: existingRecord } = person.created
+      ? { data: null as { id: string; operation_id: string; captured_at_device: string } | null }
+      : await admin
+          .from('attendance_records')
+          .select('id, operation_id, captured_at_device')
+          .eq('session_id', sessionId)
+          .eq('person_id', personId)
+          .maybeSingle();
 
     if (existingRecord) {
       // Same operation re-sent: answer idempotently.
@@ -183,13 +189,10 @@ export async function POST(request: Request) {
 
     const storageKey = `photos/${sessionId}/${personId}_${operationId}.jpg`;
 
-    const { error: uploadErr } = await admin.storage
+    // The photo upload and the record insert do not depend on each other: run them together.
+    const uploadPromise = admin.storage
       .from('mrf-attendance-photos')
       .upload(storageKey, photoBuffer, { contentType: photoType, upsert: true });
-
-    if (uploadErr) {
-      console.warn('Storage upload error:', uploadErr.message);
-    }
 
     const recordFields = {
       session_id: sessionId,
@@ -206,13 +209,30 @@ export async function POST(request: Request) {
         .insert({ ...recordFields, ...extra })
         .select('id, session_id, person_id, captured_at_device')
         .single();
-    let { data: newRecord, error: insertErr } = await insertRecord(registeredBy ? { registered_by: registeredBy } : {});
+    let [{ data: newRecord, error: insertErr }, { error: uploadErr }] = await Promise.all([
+      insertRecord(registeredBy ? { registered_by: registeredBy } : {}),
+      uploadPromise,
+    ]);
     // The teachers migration (00004) has not been run yet: still record the check-in, just without an owner.
     if (insertErr?.code === '42703' && registeredBy) {
       ({ data: newRecord, error: insertErr } = await insertRecord({}));
     }
 
+    if (uploadErr) {
+      console.warn('Storage upload error:', uploadErr.message);
+    }
+
     if (insertErr || !newRecord) {
+      // The check-in was not recorded: do not leave its photo behind. On a duplicate the same file may belong to
+      // the request that won (same operation id re-sent), so it is kept.
+      const isDuplicate =
+        insertErr?.code === '23505' ||
+        insertErr?.message?.includes('duplicate key') ||
+        insertErr?.message?.includes('uq_session_person');
+      if (!uploadErr && !isDuplicate) {
+        await admin.storage.from('mrf-attendance-photos').remove([storageKey]).catch(() => null);
+      }
+
       // 23505: another kiosk recorded the same student at the same moment.
       if (
         insertErr?.code === '23505' ||

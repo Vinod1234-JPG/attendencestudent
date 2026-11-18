@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import {
   Users,
@@ -47,24 +47,31 @@ export default function AdminDashboardPage() {
   const [rooms, setRooms] = useState<{ name: string; students: number }[]>([]);
   const [myRoom, setMyRoom] = useState('');
   const [operator, setOperator] = useState<{ name: string; role: string; eventRoom?: string } | null>(null);
+  const roomsFetchedAt = useRef(0); // the Event / Room card changes slowly: refresh it every 60 s, not every 20 s
 
   const fetchStats = async () => {
     setIsLoading(true);
     try {
       // Fetch recent attendance and registry statistics in parallel for instant speed
+      const refreshRooms = Date.now() - roomsFetchedAt.current > 60_000;
       const [recRes, attRes, roomRes, opRes] = await Promise.all([
         fetch(`/api/attendance?limit=5&_t=${Date.now()}`, { cache: 'no-store' }),
         fetch(`/api/admin/attendees?summary=1&_t=${Date.now()}`, { cache: 'no-store' }),
-        fetch(`/api/admin/event-rooms?_t=${Date.now()}`, { cache: 'no-store' }).catch(() => null),
-        fetch(`/api/kiosk/operator?_t=${Date.now()}`, { cache: 'no-store' }).catch(() => null),
+        refreshRooms ? fetch(`/api/admin/event-rooms?_t=${Date.now()}`, { cache: 'no-store' }).catch(() => null) : null,
+        refreshRooms ? fetch(`/api/kiosk/operator?_t=${Date.now()}`, { cache: 'no-store' }).catch(() => null) : null,
       ]);
 
       const [data, attData] = await Promise.all([recRes.json(), attRes.json()]);
-      const roomData = roomRes && roomRes.ok ? await roomRes.json().catch(() => null) : null;
-      const opData = opRes && opRes.ok ? await opRes.json().catch(() => null) : null;
-      if (roomData?.rooms) setRooms(roomData.rooms);
-      setMyRoom(roomData?.mine || opData?.operator?.eventRoom || '');
-      setOperator(opData?.operator || null);
+      if (refreshRooms) {
+        const roomData = roomRes && roomRes.ok ? await roomRes.json().catch(() => null) : null;
+        const opData = opRes && opRes.ok ? await opRes.json().catch(() => null) : null;
+        if (roomData?.rooms) {
+          setRooms(roomData.rooms);
+          roomsFetchedAt.current = Date.now();
+        }
+        setMyRoom(roomData?.mine || opData?.operator?.eventRoom || '');
+        setOperator(opData?.operator || null);
+      }
       const recent = data?.records || [];
 
       const totalGuides = attData.counts?.guides || 0;

@@ -38,14 +38,19 @@ export async function findOrCreateStudent(
   rawName: string,
   rawCollege: string,
   registeredBy: string | null = null,
-  eventRoom = ''
+  eventRoom = '',
+  options: { alreadyLookedUp?: boolean } = {}
 ): Promise<StudentRecord> {
   const name = cleanDisplayText(rawName);
   const college = cleanDisplayText(rawCollege);
   const studentKey = buildStudentKey(name, college);
 
-  const existing = await findStudent(admin, name, college);
-  if (existing) return existing;
+  // The kiosk already looked the student up a moment ago; a race with another kiosk is still caught by the
+  // unique index below (23505).
+  if (!options.alreadyLookedUp) {
+    const existing = await findStudent(admin, name, college);
+    if (existing) return existing;
+  }
 
   const fields = {
     category: 'student',

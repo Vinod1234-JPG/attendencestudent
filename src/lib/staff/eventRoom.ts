@@ -25,8 +25,14 @@ export async function getEventRoomFor(admin: SupabaseClient, userId: string | nu
   }
 }
 
-/** Every staff member's event / room, by user id. One request for the whole list. */
-export async function getStaffEventRooms(admin: SupabaseClient): Promise<Map<string, string>> {
+// Teachers' rooms change only when the admin edits them; remember the list briefly instead of asking the auth
+// server on every records request and dashboard refresh.
+const ROOMS_TTL_MS = 60_000;
+let roomsCache: { map: Map<string, string>; at: number } | null = null;
+
+/** Every staff member's event / room, by user id. One request for the whole list (cached for a minute). */
+export async function getStaffEventRooms(admin: SupabaseClient, fresh = false): Promise<Map<string, string>> {
+  if (!fresh && roomsCache && Date.now() - roomsCache.at < ROOMS_TTL_MS) return roomsCache.map;
   const map = new Map<string, string>();
   try {
     const { data } = await admin.auth.admin.listUsers({ perPage: 1000 });
@@ -36,7 +42,9 @@ export async function getStaffEventRooms(admin: SupabaseClient): Promise<Map<str
     }
   } catch {
     // no event / room names: everything shows as General
+    return map; // do not cache a failure
   }
+  roomsCache = { map, at: Date.now() };
   return map;
 }
 

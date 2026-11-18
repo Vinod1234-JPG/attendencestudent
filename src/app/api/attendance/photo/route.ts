@@ -23,18 +23,13 @@ export async function GET(request: Request) {
     if (isTeacher(auth.admin)) {
       const { data: photo } = await admin
         .from('attendance_photos')
-        .select('attendance_record_id')
+        .select('attendance_record_id, attendance_records ( registered_by )')
         .eq('storage_object_key', key)
         .maybeSingle();
-      let allowed = false;
-      if (photo?.attendance_record_id) {
-        const { data: rec } = await admin
-          .from('attendance_records')
-          .select('registered_by')
-          .eq('id', photo.attendance_record_id)
-          .maybeSingle();
-        allowed = !!rec && rec.registered_by === auth.admin.id;
-      }
+      const rec: any = Array.isArray((photo as any)?.attendance_records)
+        ? (photo as any).attendance_records[0]
+        : (photo as any)?.attendance_records;
+      const allowed = !!rec && rec.registered_by === auth.admin.id;
       if (!allowed) return new NextResponse('Photo not found', { status: 404 });
     }
     const { data, error } = await admin.storage
