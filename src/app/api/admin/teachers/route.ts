@@ -19,6 +19,12 @@ const fail = (error: string, status: number) => NextResponse.json({ error }, { s
 const needsSupabase = () =>
   fail('Teacher accounts need the live Supabase connection. They are not available in local test mode.', 503);
 
+/** "Event / Room" the teacher is assigned to, for example "Hackathon 2026 - Room 204". Stored on their login. */
+function cleanEventRoom(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  return value.replace(/\s+/g, ' ').trim();
+}
+
 function validatePassword(password: unknown): string | null {
   if (typeof password !== 'string' || password.length < 8) return 'The password must be at least 8 characters.';
   if (password.length > 72) return 'The password must be at most 72 characters.';
@@ -49,10 +55,16 @@ export async function GET() {
     const teachers = profiles || [];
     const ids = teachers.map((t: any) => t.id);
 
-    const emailById = new Map<string, { email: string; last: string | null }>();
+    const emailById = new Map<string, { email: string; last: string | null; eventRoom: string }>();
     if (ids.length > 0) {
       const { data } = await admin.auth.admin.listUsers({ perPage: 1000 });
-      (data?.users || []).forEach((u: any) => emailById.set(u.id, { email: u.email || '', last: u.last_sign_in_at || null }));
+      (data?.users || []).forEach((u: any) =>
+        emailById.set(u.id, {
+          email: u.email || '',
+          last: u.last_sign_in_at || null,
+          eventRoom: typeof u.user_metadata?.event_room === 'string' ? u.user_metadata.event_room : '',
+        })
+      );
     }
 
     const counts = new Map<string, number>();
@@ -66,6 +78,7 @@ export async function GET() {
         id: t.id,
         full_name: t.full_name || '',
         email: emailById.get(t.id)?.email || '',
+        event_room: emailById.get(t.id)?.eventRoom || '',
         created_at: t.created_at,
         last_sign_in_at: emailById.get(t.id)?.last || null,
         registrations: counts.get(t.id) || 0,
@@ -91,9 +104,11 @@ export async function POST(request: Request) {
     const fullName = typeof body.full_name === 'string' ? body.full_name.replace(/\s+/g, ' ').trim() : '';
     const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
     const password = body.password;
+    const eventRoom = cleanEventRoom(body.event_room) || '';
 
     if (fullName.length < 2 || fullName.length > 80) return fail('Enter the teacher\'s name (2 to 80 characters).', 400);
     if (!EMAIL_RE.test(email) || email.length > 254) return fail('Enter a valid email address.', 400);
+    if (eventRoom.length < 1 || eventRoom.length > 100) return fail('Enter the event or room this teacher is assigned to.', 400);
     const pwError = validatePassword(password);
     if (pwError) return fail(pwError, 400);
 
@@ -102,7 +117,7 @@ export async function POST(request: Request) {
       email,
       password,
       email_confirm: true,
-      user_metadata: { full_name: fullName, role: 'teacher' },
+      user_metadata: { full_name: fullName, role: 'teacher', event_room: eventRoom },
     });
 
     if (createErr || !created?.user) {
@@ -130,11 +145,11 @@ export async function POST(request: Request) {
       entityType: 'TEACHER',
       entityId: created.user.id,
       outcome: 'success',
-      metadata: { email, full_name: fullName },
+      metadata: { email, full_name: fullName, event_room: eventRoom },
     });
 
     return NextResponse.json(
-      { success: true, teacher: { id: created.user.id, full_name: fullName, email } },
+      { success: true, teacher: { id: created.user.id, full_name: fullName, email, event_room: eventRoom } },
       { status: 201, headers: NO_STORE }
     );
   } catch (err: any) {
@@ -144,7 +159,7 @@ export async function POST(request: Request) {
   }
 }
 
-/** Resets a teacher's password and/or changes their name. */
+/** Resets a teacher's password and/or changes their name or event / room. */
 export async function PATCH(request: Request) {
   const auth = await requireAdmin();
   if (auth.response) return auth.response;
@@ -172,6 +187,17 @@ export async function PATCH(request: Request) {
       const { error } = await admin.from('profiles').update({ full_name: fullName }).eq('id', teacher.id);
       if (error) return fail(error.message, 500);
       changes.push('name');
+    }
+
+    if (body.event_room !== undefined) {
+      const eventRoom = cleanEventRoom(body.event_room) || '';
+      if (eventRoom.length < 1 || eventRoom.length > 100) return fail('Enter the event or room this teacher is assigned to.', 400);
+      const { data: current } = await admin.auth.admin.getUserById(teacher.id);
+      const { error } = await admin.auth.admin.updateUserById(teacher.id, {
+        user_metadata: { ...(current?.user?.user_metadata || {}), event_room: eventRoom },
+      });
+      if (error) return fail(error.message, 500);
+      changes.push('event_room');
     }
 
     if (changes.length === 0) return fail('Nothing to change.', 400);

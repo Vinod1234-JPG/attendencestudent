@@ -14,6 +14,8 @@ import {
   CheckCircle2,
   AlertTriangle,
   Users,
+  MapPin,
+  Pencil,
 } from 'lucide-react';
 import { Modal } from '@/components/ui/modal';
 
@@ -21,6 +23,7 @@ interface Teacher {
   id: string;
   full_name: string;
   email: string;
+  event_room: string;
   created_at: string;
   last_sign_in_at: string | null;
   registrations: number;
@@ -29,6 +32,7 @@ interface Teacher {
 interface Credentials {
   name: string;
   email: string;
+  eventRoom?: string;
   password: string;
   reset?: boolean;
 }
@@ -82,6 +86,7 @@ export default function TeachersPage() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [eventRoom, setEventRoom] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [creating, setCreating] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -91,6 +96,8 @@ export default function TeachersPage() {
   const [resetFor, setResetFor] = useState<Teacher | null>(null);
   const [newPassword, setNewPassword] = useState('');
   const [removeFor, setRemoveFor] = useState<Teacher | null>(null);
+  const [roomFor, setRoomFor] = useState<Teacher | null>(null);
+  const [newRoom, setNewRoom] = useState('');
   const [busy, setBusy] = useState(false);
   const [dialogError, setDialogError] = useState<string | null>(null);
 
@@ -120,14 +127,15 @@ export default function TeachersPage() {
       const res = await fetch('/api/admin/teachers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ full_name: name, email, password }),
+        body: JSON.stringify({ full_name: name, email, password, event_room: eventRoom }),
       });
       const data = await res.json().catch(() => null);
       if (!res.ok || !data?.success) throw new Error(data?.error || 'Could not create the teacher.');
-      setCredentials({ name: data.teacher.full_name, email: data.teacher.email, password });
+      setCredentials({ name: data.teacher.full_name, email: data.teacher.email, password, eventRoom: data.teacher.event_room });
       setName('');
       setEmail('');
       setPassword('');
+      setEventRoom('');
       setShowPassword(false);
       await load();
     } catch (err: any) {
@@ -149,7 +157,7 @@ export default function TeachersPage() {
       });
       const data = await res.json().catch(() => null);
       if (!res.ok || !data?.success) throw new Error(data?.error || 'Could not reset the password.');
-      setCredentials({ name: resetFor.full_name, email: resetFor.email, password: newPassword, reset: true });
+      setCredentials({ name: resetFor.full_name, email: resetFor.email, password: newPassword, eventRoom: resetFor.event_room, reset: true });
       setResetFor(null);
       setNewPassword('');
     } catch (err: any) {
@@ -158,6 +166,30 @@ export default function TeachersPage() {
       setBusy(false);
     }
   };
+
+  const submitRoom = async () => {
+    if (!roomFor) return;
+    setBusy(true);
+    setDialogError(null);
+    try {
+      const res = await fetch('/api/admin/teachers', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: roomFor.id, event_room: newRoom }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success) throw new Error(data?.error || 'Could not change the event / room.');
+      setRoomFor(null);
+      await load();
+    } catch (err: any) {
+      setDialogError(err.message || 'Could not change the event / room.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Events / rooms already used, offered as suggestions so the same name is spelled the same way
+  const knownRooms = Array.from(new Set(teachers.map((t) => t.event_room).filter(Boolean))).sort((a, b) => a.localeCompare(b));
 
   const submitRemove = async () => {
     if (!removeFor) return;
@@ -224,6 +256,11 @@ export default function TeachersPage() {
                   <CopyButton text={credentials.password} label="password" />
                 </div>
               </dl>
+              {credentials.eventRoom && (
+                <p className="mt-2 flex items-center gap-1.5 text-xs text-[#166534]">
+                  <MapPin className="w-3.5 h-3.5" /> Assigned to <strong>{credentials.eventRoom}</strong>
+                </p>
+              )}
             </div>
             <button
               onClick={() => setCredentials(null)}
@@ -288,6 +325,32 @@ export default function TeachersPage() {
             </div>
           </div>
         </div>
+        <div className="grid gap-4 md:grid-cols-3">
+          <div className="md:col-span-2">
+            <label htmlFor="t-room" className="block text-xs font-semibold text-[#344054] mb-1.5">
+              Event / Room <span className="font-normal text-[#98A2B3]">(where this teacher takes attendance)</span>
+            </label>
+            <div className="relative">
+              <MapPin className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#98A2B3]" />
+              <input
+                id="t-room"
+                value={eventRoom}
+                onChange={(e) => setEventRoom(e.target.value)}
+                className={`${inputCls} pl-9`}
+                placeholder="e.g. Tech Fest 2026, Seminar Hall or Room 204"
+                autoComplete="off"
+                maxLength={100}
+                list="t-room-list"
+                required
+              />
+            </div>
+          </div>
+        </div>
+        <datalist id="t-room-list">
+          {knownRooms.map((r) => (
+            <option key={r} value={r} />
+          ))}
+        </datalist>
         {formError && (
           <div role="alert" className="flex items-start gap-2 rounded-lg border border-[#C0393A]/30 bg-[#FEF3F2] px-3 py-2.5 text-xs text-[#B42318]">
             <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" /> <span>{formError}</span>
@@ -342,6 +405,17 @@ export default function TeachersPage() {
                   <p className="text-sm font-bold text-[#182230] truncate">{t.full_name || '(no name)'}</p>
                   <p className="text-xs text-[#667085] truncate">{t.email}</p>
                 </div>
+                <div className="text-xs text-[#667085] w-48 min-w-0">
+                  <span className="block text-[#98A2B3]">Event / Room</span>
+                  {t.event_room ? (
+                    <span className="flex items-center gap-1 font-semibold text-[#142D4E]">
+                      <MapPin className="w-3.5 h-3.5 shrink-0 text-[#2864B4]" />
+                      <span className="truncate" title={t.event_room}>{t.event_room}</span>
+                    </span>
+                  ) : (
+                    <span className="italic text-[#98A2B3]">Not assigned</span>
+                  )}
+                </div>
                 <div className="text-xs text-[#667085] w-32">
                   <span className="block text-[#98A2B3]">Students registered</span>
                   <strong className="text-[#142D4E] text-sm tabular-nums">{t.registrations}</strong>
@@ -351,6 +425,16 @@ export default function TeachersPage() {
                   {fmt(t.last_sign_in_at)}
                 </div>
                 <div className="flex items-center gap-2 ml-auto">
+                  <button
+                    onClick={() => {
+                      setDialogError(null);
+                      setNewRoom(t.event_room || '');
+                      setRoomFor(t);
+                    }}
+                    className="h-8 px-3 rounded-lg border border-[#D0D5DD] bg-white text-xs font-semibold text-[#344054] flex items-center gap-1.5 hover:bg-[#F7F9FC]"
+                  >
+                    <Pencil className="w-3.5 h-3.5" /> {t.event_room ? 'Change event / room' : 'Assign event / room'}
+                  </button>
                   <button
                     onClick={() => {
                       setDialogError(null);
@@ -409,6 +493,37 @@ export default function TeachersPage() {
             </button>
             <button type="button" onClick={submitReset} disabled={busy || newPassword.length < 8} className="h-10 px-4 rounded-lg bg-[#142D4E] text-white text-sm font-semibold disabled:opacity-60">
               {busy ? 'Saving…' : 'Set new password'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Change event / room */}
+      <Modal isOpen={!!roomFor} onClose={() => !busy && setRoomFor(null)} title="Event / Room" maxWidth="md">
+        <div className="space-y-4">
+          <p className="text-xs text-[#667085]">
+            Which event or room is <strong className="text-[#182230]">{roomFor?.full_name}</strong> taking attendance for?
+          </p>
+          <div className="relative">
+            <MapPin className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#98A2B3]" />
+            <input
+              value={newRoom}
+              onChange={(e) => setNewRoom(e.target.value)}
+              className={`${inputCls} pl-9`}
+              aria-label="Event or room"
+              placeholder="e.g. Tech Fest 2026, Seminar Hall or Room 204"
+              maxLength={100}
+              list="t-room-list"
+              autoComplete="off"
+            />
+          </div>
+          {dialogError && <p role="alert" className="text-xs text-[#B42318]">{dialogError}</p>}
+          <div className="flex justify-end gap-3">
+            <button type="button" onClick={() => setRoomFor(null)} disabled={busy} className="h-10 px-4 rounded-lg border border-[#D0D5DD] bg-white text-sm font-semibold text-[#344054]">
+              Cancel
+            </button>
+            <button type="button" onClick={submitRoom} disabled={busy || !newRoom.trim()} className="h-10 px-4 rounded-lg bg-[#142D4E] text-white text-sm font-semibold disabled:opacity-60">
+              {busy ? 'Saving…' : 'Save'}
             </button>
           </div>
         </div>
