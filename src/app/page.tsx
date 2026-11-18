@@ -21,7 +21,7 @@ export default function HomePage() {
         <div className="flex items-center gap-3">
           <div className="w-11 h-11 rounded-full overflow-hidden bg-white shadow-xs shrink-0 border border-[#E4E9F0] flex items-center justify-center p-0.5">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo.jpg" alt="MRF Logo" className="w-full h-full object-contain rounded-full" />
+            <img src="/mitm-logo.png" alt="MRF Logo" className="w-full h-full object-contain rounded-full" />
           </div>
           <div>
             <h1 className="text-sm font-bold text-[#142D4E] tracking-tight">

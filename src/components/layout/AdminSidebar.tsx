@@ -65,7 +65,7 @@ export function AdminSidebar({
       <div className="p-6 border-b border-[#0B1B30] flex items-center gap-3">
         <div className="w-10 h-10 rounded-full overflow-hidden bg-white shadow-sm shrink-0 flex items-center justify-center p-0.5 border border-white/20">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.jpg" alt="MRF Logo" className="w-full h-full object-contain rounded-full" />
+          <img src="/mitm-logo.png" alt="MRF Logo" className="w-full h-full object-contain rounded-full" />
         </div>
         <div className="overflow-hidden">
           <h1 className="font-bold text-sm tracking-wide text-white leading-tight">MIT MYSORE STUDENTS</h1>

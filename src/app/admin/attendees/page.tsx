@@ -28,115 +28,9 @@ const collegeSize = (len: number) => Math.max(1.5, Math.min(2.8, 90 / Math.max(l
 const GOLD = '#F5A524';
 const GOLD_LIGHT = '#FFD76A';
 
-/** Stylised night-time campus illustration (decorative). */
-function Campus() {
-  const stars = Array.from({ length: 34 }, (_, i) => ({
-    x: (i * 137) % 790 + 5,
-    y: ((i * 61) % 330) + 10,
-    r: 0.8 + ((i * 7) % 4) * 0.45,
-    o: 0.35 + ((i * 13) % 6) * 0.1,
-  }));
-  const windows: { x: number; y: number; on: boolean }[] = [];
-  for (let row = 0; row < 4; row++) {
-    for (let col = 0; col < 9; col++) {
-      if (col >= 4 && col <= 4) continue; // leave the central tower clear
-      windows.push({ x: 150 + col * 55, y: 470 + row * 68, on: (row * 7 + col * 3) % 5 !== 0 });
-    }
-  }
-  const towerWindows: { x: number; y: number; on: boolean }[] = [];
-  for (let row = 0; row < 5; row++) {
-    for (let col = 0; col < 2; col++) {
-      towerWindows.push({ x: 355 + col * 55, y: 335 + row * 68, on: (row + col) % 3 !== 0 });
-    }
-  }
-  const trees = [
-    { x: 700, y: 640, s: 1.25 },
-    { x: 770, y: 700, s: 1.5 },
-    { x: 620, y: 700, s: 0.9 },
-    { x: 40, y: 700, s: 1.1 },
-  ];
-
-  return (
-    <svg
-      viewBox="0 0 800 900"
-      preserveAspectRatio="xMidYMax slice"
-      className="absolute inset-0 h-full w-full"
-      aria-hidden
-    >
-      <defs>
-        <linearGradient id="cSky" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#081a44" />
-          <stop offset="0.55" stopColor="#12337a" />
-          <stop offset="1" stopColor="#0a1a3d" />
-        </linearGradient>
-        <linearGradient id="cWall" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#33497f" />
-          <stop offset="1" stopColor="#17264d" />
-        </linearGradient>
-        <linearGradient id="cGround" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#0d1b3b" />
-          <stop offset="1" stopColor="#050a18" />
-        </linearGradient>
-        <radialGradient id="cMoon" cx="0.5" cy="0.5" r="0.5">
-          <stop offset="0" stopColor="#fff8dc" />
-          <stop offset="0.45" stopColor="#fde68a" stopOpacity="0.85" />
-          <stop offset="1" stopColor="#fde68a" stopOpacity="0" />
-        </radialGradient>
-        <radialGradient id="cGlow" cx="0.5" cy="1" r="0.8">
-          <stop offset="0" stopColor="#fbbf24" stopOpacity="0.45" />
-          <stop offset="1" stopColor="#fbbf24" stopOpacity="0" />
-        </radialGradient>
-      </defs>
-
-      <rect width="800" height="900" fill="url(#cSky)" />
-      {stars.map((s, i) => (
-        <circle key={i} cx={s.x} cy={s.y} r={s.r} fill="#dbeafe" opacity={s.o} />
-      ))}
-      <circle cx="610" cy="150" r="120" fill="url(#cMoon)" opacity="0.55" />
-      <circle cx="610" cy="150" r="30" fill="#fff4c4" />
-
-      {/* warm glow behind the building */}
-      <ellipse cx="400" cy="770" rx="420" ry="220" fill="url(#cGlow)" />
-
-      {/* building */}
-      <rect x="60" y="520" width="110" height="250" fill="url(#cWall)" />
-      <rect x="630" y="520" width="110" height="250" fill="url(#cWall)" />
-      <rect x="140" y="440" width="520" height="330" fill="url(#cWall)" />
-      <rect x="320" y="300" width="160" height="470" fill="url(#cWall)" />
-      <polygon points="308,300 400,236 492,300" fill="#3a5290" />
-      <rect x="130" y="428" width="540" height="16" fill="#3f5a9c" />
-      <rect x="50" y="508" width="130" height="14" fill="#3f5a9c" />
-      <rect x="620" y="508" width="130" height="14" fill="#3f5a9c" />
-      <line x1="400" y1="236" x2="400" y2="170" stroke="#8aa4d6" strokeWidth="3" />
-      <polygon points="402,172 452,186 402,200" fill={GOLD} opacity="0.9" />
-
-      {windows.map((w, i) => (
-        <rect key={i} x={w.x} y={w.y} width="28" height="42" rx="3" fill={w.on ? '#fde68a' : '#223863'} opacity={w.on ? 0.85 : 0.9} />
-      ))}
-      {towerWindows.map((w, i) => (
-        <rect key={`t${i}`} x={w.x} y={w.y} width="32" height="44" rx="3" fill={w.on ? '#fde68a' : '#223863'} opacity={w.on ? 0.9 : 0.9} />
-      ))}
-      {[0, 1, 2, 3, 4].map((i) => (
-        <rect key={`c${i}`} x={338 + i * 30} y="690" width="14" height="80" fill="#8aa4d6" opacity="0.7" />
-      ))}
-      <path d="M368 770 v-52 a32 32 0 0 1 64 0 v52 z" fill="#fde68a" opacity="0.9" />
-
-      {/* ground and path */}
-      <rect x="0" y="770" width="800" height="130" fill="url(#cGround)" />
-      <polygon points="372,770 428,770 560,900 240,900" fill="#16254a" opacity="0.9" />
-
-      {/* trees */}
-      {trees.map((t, i) => (
-        <g key={i} transform={`translate(${t.x} ${t.y}) scale(${t.s})`}>
-          <rect x="-5" y="40" width="10" height="70" fill="#050c1d" />
-          <circle cx="0" cy="10" r="48" fill="#071428" />
-          <circle cx="-30" cy="34" r="34" fill="#061126" />
-          <circle cx="30" cy="30" r="38" fill="#08162c" />
-        </g>
-      ))}
-    </svg>
-  );
-}
+// College artwork. Replace these files in /public to change the logo or the campus photo.
+const COLLEGE_LOGO = '/mitm-logo.png';
+const CAMPUS_PHOTO = '/mitm-campus.jpg';
 
 /** Cinematic backdrop: navy base, gold and blue glows, campus on the right, light streaks. */
 function Backdrop() {
@@ -153,15 +47,21 @@ function Backdrop() {
         }}
       />
 
-      {/* campus, faded into the dark on its left edge */}
+      {/* campus photo along the bottom right, faded into the dark at its top and left edges */}
       <div
-        className="absolute inset-y-0 right-0 w-[52vw] opacity-90"
+        className="absolute bottom-0 right-0 w-[78vw]"
         style={{
-          WebkitMaskImage: 'linear-gradient(to right, transparent 0%, #000 42%)',
-          maskImage: 'linear-gradient(to right, transparent 0%, #000 42%)',
+          WebkitMaskImage:
+            'linear-gradient(to right, transparent 0%, #000 38%), linear-gradient(to bottom, transparent 0%, #000 30%)',
+          WebkitMaskComposite: 'source-in',
+          maskImage: 'linear-gradient(to right, transparent 0%, #000 38%), linear-gradient(to bottom, transparent 0%, #000 30%)',
+          maskComposite: 'intersect',
         }}
       >
-        <Campus />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={CAMPUS_PHOTO} alt="" className="block h-auto w-full select-none" draggable={false} />
+        {/* navy tint so the name and college stay easy to read on top of the photo */}
+        <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, rgba(5,11,28,0.55) 0%, rgba(5,11,28,0.35) 60%, rgba(5,11,28,0.6) 100%)' }} />
       </div>
       <div className="absolute inset-0" style={{ background: 'linear-gradient(90deg, rgba(3,6,14,0.55) 0%, rgba(3,6,14,0.0) 55%)' }} />
 
@@ -186,7 +86,7 @@ function Brand() {
     <div className="absolute left-[3cqw] top-[3.6cqh] z-10 flex items-center gap-[1.2cqw]">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src="/logo.jpg"
+        src={COLLEGE_LOGO}
         alt="MIT Mysore"
         className="aspect-square h-[max(9cqh,56px)] rounded-full bg-white object-contain p-[3px] shadow-[0_0_2.4vw_rgba(245,165,36,0.45)] ring-[0.25cqw] ring-amber-400/80"
       />

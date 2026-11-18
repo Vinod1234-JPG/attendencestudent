@@ -59,7 +59,7 @@ export default function LoginPage() {
         <div className="text-center mb-7">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="/logo.jpg"
+            src="/mitm-logo.png"
             alt="MIT Mysore"
             className="w-14 h-14 rounded-full border border-[#E4E9F0] bg-white p-0.5 mx-auto mb-4 object-contain"
           />

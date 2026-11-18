@@ -23,7 +23,7 @@ export function AppFooter({ className = '', variant = 'light' }: AppFooterProps)
           <div className="w-8 h-8 rounded-full overflow-hidden bg-white shadow-xs shrink-0 border border-[#E4E9F0] flex items-center justify-center p-0.5">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src="/logo.jpg"
+              src="/mitm-logo.png"
               alt="MRF - MITM Logo"
               className="w-full h-full object-contain rounded-full"
             />
