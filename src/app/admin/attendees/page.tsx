@@ -87,11 +87,11 @@ function DeptBrand() {
   return (
     <div className="absolute right-[3cqw] top-[3.6cqh] z-10 flex items-center gap-[1.2cqw]">
       <div className="text-right leading-tight">
-        <div className="font-extrabold tracking-tight text-white" style={{ fontSize: 'max(3.6cqh, 18px)' }}>
-          CSE Department
-        </div>
         <div className="font-medium text-slate-200/90" style={{ fontSize: 'max(2.6cqh, 13px)' }}>
-          Computer Science &amp; Engineering
+          Department of
+        </div>
+        <div className="font-extrabold tracking-tight text-white" style={{ fontSize: 'max(3.2cqh, 16px)' }}>
+          Computer Science and Engineering
         </div>
       </div>
       <span className="h-[7.5cqh] w-[0.14cqw] rounded-full bg-gradient-to-b from-transparent via-amber-400 to-transparent" />
