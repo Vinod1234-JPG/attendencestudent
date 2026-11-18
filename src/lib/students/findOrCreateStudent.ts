@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { addDevPeople, getDevStorage, DevPerson } from '@/lib/db/devStore';
 import { buildStudentKey, cleanDisplayText } from '@/lib/utils/normalization';
+import { EVENT_ROOM_KEY } from '@/lib/staff/eventRoom';
 
 export interface StudentRecord {
   id: string;
@@ -36,7 +37,8 @@ export async function findOrCreateStudent(
   admin: SupabaseClient,
   rawName: string,
   rawCollege: string,
-  registeredBy: string | null = null
+  registeredBy: string | null = null,
+  eventRoom = ''
 ): Promise<StudentRecord> {
   const name = cleanDisplayText(rawName);
   const college = cleanDisplayText(rawCollege);
@@ -52,7 +54,11 @@ export async function findOrCreateStudent(
     student_key: studentKey,
     normalized_email: null,
     phd_id: null,
-    metadata: { College: college, Status: 'Self-Registered at Kiosk' },
+    metadata: {
+      College: college,
+      Status: 'Self-Registered at Kiosk',
+      ...(eventRoom ? { [EVENT_ROOM_KEY]: eventRoom } : {}),
+    },
   };
   const insertStudent = (extra: Record<string, unknown>) =>
     admin.from('people').insert({ ...fields, ...extra }).select(STUDENT_COLUMNS).single();

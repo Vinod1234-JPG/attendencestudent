@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Download,
   FileSpreadsheet,
@@ -11,6 +11,7 @@ import {
   Camera,
   Award,
   Sparkles,
+  MapPin,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -22,6 +23,21 @@ export default function ExportsPage() {
   const [isExporting, setIsExporting] = useState<string | null>(null);
   const [recoveryStatus, setRecoveryStatus] = useState<string | null>(null);
 
+  // Event / Room: every export (PDF, Excel, CSV, ZIP) can be limited to one event or room
+  const [rooms, setRooms] = useState<{ name: string; students: number }[]>([]);
+  const [room, setRoom] = useState('');
+
+  useEffect(() => {
+    fetch(`/api/admin/event-rooms?_t=${Date.now()}`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        const list = d?.rooms || [];
+        setRooms(list);
+        if (list.length === 1) setRoom(list[0].name); // only one: export it by name
+      })
+      .catch(() => {});
+  }, []);
+
   // Trigger server-generated downloads
   const handleServerExport = async (
     format: 'csv' | 'xlsx' | 'zip' | 'pdf',
@@ -32,7 +48,9 @@ export default function ExportsPage() {
     setIsExporting(key);
 
     try {
-      const url = `/api/exports?format=${format}&category=${category}&source=${source}`;
+      const url = `/api/exports?format=${format}&category=${category}&source=${source}${
+        room ? `&event_room=${encodeURIComponent(room)}` : ''
+      }`;
       const res = await fetch(url);
 
       if (!res.ok) {
@@ -135,6 +153,29 @@ NOTE: These records represent attendance captured locally on this hardware devic
         <h1 className="text-2xl font-extrabold text-[#142D4E]">Export Attendance Details</h1>
         <p className="text-xs text-[#667085] mt-1">
           Download authenticated attendance reports, printable PDF verification dossiers with photos, spreadsheets, and archived photograph bundles.
+        </p>
+      </div>
+
+      {/* Event / Room to export */}
+      <div className="flex flex-col gap-3 rounded-xl border border-[#D6E4F5] bg-[#F5F9FF] p-4 sm:flex-row sm:items-center">
+        <label htmlFor="export-room" className="flex items-center gap-2 text-sm font-bold text-[#142D4E] shrink-0">
+          <MapPin className="w-4 h-4 text-[#2864B4]" /> Event / Room
+        </label>
+        <select
+          id="export-room"
+          value={room}
+          onChange={(e) => setRoom(e.target.value)}
+          className="h-10 w-full sm:max-w-md rounded-lg border border-[#D0D5DD] bg-white px-3 text-sm outline-none focus:border-[#2864B4] focus:ring-2 focus:ring-[#2864B4]/20"
+        >
+          <option value="">All events / rooms</option>
+          {rooms.map((r) => (
+            <option key={r.name} value={r.name}>
+              {r.name} ({r.students} student{r.students === 1 ? '' : 's'})
+            </option>
+          ))}
+        </select>
+        <p className="text-xs text-[#667085]">
+          Downloads below include only this event / room, and its name is printed at the top and bottom of the PDF.
         </p>
       </div>
 

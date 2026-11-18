@@ -11,7 +11,8 @@ import {
   ArrowRight,
   RefreshCw,
   Camera,
-  AlertCircle
+  AlertCircle,
+  MapPin
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -43,17 +44,27 @@ export default function AdminDashboardPage() {
     recentAttendance: [],
   });
   const [isLoading, setIsLoading] = useState(true);
+  const [rooms, setRooms] = useState<{ name: string; students: number }[]>([]);
+  const [myRoom, setMyRoom] = useState('');
+  const [operator, setOperator] = useState<{ name: string; role: string; eventRoom?: string } | null>(null);
 
   const fetchStats = async () => {
     setIsLoading(true);
     try {
       // Fetch recent attendance and registry statistics in parallel for instant speed
-      const [recRes, attRes] = await Promise.all([
+      const [recRes, attRes, roomRes, opRes] = await Promise.all([
         fetch(`/api/attendance?limit=5&_t=${Date.now()}`, { cache: 'no-store' }),
         fetch(`/api/admin/attendees?summary=1&_t=${Date.now()}`, { cache: 'no-store' }),
+        fetch(`/api/admin/event-rooms?_t=${Date.now()}`, { cache: 'no-store' }).catch(() => null),
+        fetch(`/api/kiosk/operator?_t=${Date.now()}`, { cache: 'no-store' }).catch(() => null),
       ]);
 
       const [data, attData] = await Promise.all([recRes.json(), attRes.json()]);
+      const roomData = roomRes && roomRes.ok ? await roomRes.json().catch(() => null) : null;
+      const opData = opRes && opRes.ok ? await opRes.json().catch(() => null) : null;
+      if (roomData?.rooms) setRooms(roomData.rooms);
+      setMyRoom(roomData?.mine || opData?.operator?.eventRoom || '');
+      setOperator(opData?.operator || null);
       const recent = data?.records || [];
 
       const totalGuides = attData.counts?.guides || 0;
@@ -112,6 +123,41 @@ export default function AdminDashboardPage() {
           </Link>
         </div>
       </div>
+
+      {/* Event / Room: the teacher's assignment, and students per event / room */}
+      {(operator?.role === 'teacher' || myRoom || rooms.length > 0) && (
+        <div className="bg-white p-5 rounded-xl border border-[#E4E9F0] shadow-sm space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-sm font-bold text-[#142D4E] flex items-center gap-2">
+              <MapPin className="w-4 h-4 text-[#2864B4]" /> Event / Room
+            </h2>
+            {operator?.role === 'teacher' && (
+              <span className="text-xs text-[#667085]">
+                You are registering students for{' '}
+                <strong className="text-[#142D4E]">{myRoom || 'no event / room yet (ask the admin to assign one)'}</strong>
+              </span>
+            )}
+          </div>
+          {rooms.length === 0 ? (
+            <p className="text-xs text-[#667085]">No check-ins yet.</p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {rooms.map((r) => (
+                <span
+                  key={r.name}
+                  className="inline-flex items-center gap-2 rounded-lg border border-[#D6E4F5] bg-[#F5F9FF] px-3 py-1.5 text-xs"
+                >
+                  <MapPin className="w-3.5 h-3.5 text-[#2864B4]" />
+                  <span className="font-semibold text-[#142D4E]">{r.name}</span>
+                  <span className="rounded-full bg-[#142D4E] px-2 py-0.5 text-[10px] font-bold text-white tabular-nums">
+                    {r.students}
+                  </span>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Empty State when no people registered */}
       {!isLoading && stats.totalRegistered === 0 && (
@@ -211,6 +257,7 @@ export default function AdminDashboardPage() {
                   <tr>
                     <th className="px-6 py-3 font-semibold">Student Name</th>
                     <th className="px-6 py-3 font-semibold">College</th>
+                    <th className="px-6 py-3 font-semibold">Event / Room</th>
                     <th className="px-6 py-3 font-semibold">Timestamp</th>
                     <th className="px-6 py-3 font-semibold">Photo</th>
                     <th className="px-6 py-3 font-semibold">Status</th>
@@ -224,6 +271,9 @@ export default function AdminDashboardPage() {
                       </td>
                       <td className="px-6 py-3.5 text-[#667085]">
                         {rec.attendee?.college || rec.attendee?.identifier || '—'}
+                      </td>
+                      <td className="px-6 py-3.5 font-semibold text-[#142D4E]">
+                        {rec.event_room || '—'}
                       </td>
                       <td className="px-6 py-3.5 text-[#667085]">
                         {new Date(rec.captured_at_device).toLocaleTimeString([], {

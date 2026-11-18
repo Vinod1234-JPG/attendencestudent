@@ -253,6 +253,7 @@ export default function AttendanceRecordsPage() {
                   <th className="px-6 py-3 w-16">Photo</th>
                   <th className="px-6 py-3">Student Name</th>
                   <th className="px-6 py-3">College</th>
+                  <th className="px-6 py-3">Event / Room</th>
                   <th className="px-6 py-3">Check-In Time</th>
                   <th className="px-6 py-3">Status</th>
                   <th className="px-6 py-3 text-right">Actions</th>
@@ -261,14 +262,14 @@ export default function AttendanceRecordsPage() {
               <tbody className="divide-y divide-[#E4E9F0]">
                 {isLoading ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-8 text-center text-[#667085]">
+                    <td colSpan={7} className="px-6 py-8 text-center text-[#667085]">
                       <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-[#2864B4]" />
                       Loading verified records...
                     </td>
                   </tr>
                 ) : records.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-8 text-center text-[#667085]">
+                    <td colSpan={7} className="px-6 py-8 text-center text-[#667085]">
                       No attendance check-ins found matching your search.
                     </td>
                   </tr>
@@ -305,6 +306,9 @@ export default function AttendanceRecordsPage() {
                       <td className="px-6 py-3 text-[#182230]">
                         {r.attendee.college || r.attendee.identifier || '—'}
                       </td>
+
+                      {/* Event / Room */}
+                      <td className="px-6 py-3 font-semibold text-[#142D4E]">{r.event_room || '—'}</td>
 
                       {/* Time */}
                       <td className="px-6 py-3 text-[#667085]">
@@ -420,6 +424,10 @@ export default function AttendanceRecordsPage() {
                 <span className="font-semibold text-[#182230]">
                   {selectedRecord.attendee.college || selectedRecord.attendee.identifier || '—'}
                 </span>
+              </div>
+              <div className="flex justify-between border-b border-[#E4E9F0] pb-2">
+                <span className="text-[#667085]">Event / Room:</span>
+                <span className="font-semibold text-[#182230]">{selectedRecord.event_room || '—'}</span>
               </div>
               <div className="flex justify-between border-b border-[#E4E9F0] pb-2">
                 <span className="text-[#667085]">Device Capture Timestamp:</span>

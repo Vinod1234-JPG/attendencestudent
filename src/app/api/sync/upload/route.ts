@@ -5,6 +5,7 @@ import { cleanDisplayText, validateStudentDetails } from '@/lib/utils/normalizat
 import { findOrCreateStudent } from '@/lib/students/findOrCreateStudent';
 import { emitRegistration } from '@/lib/live-bus';
 import { getCurrentAdmin } from '@/lib/auth/requireAdmin';
+import { getEventRoomFor } from '@/lib/staff/eventRoom';
 
 export async function POST(request: Request) {
   try {
@@ -38,7 +39,9 @@ export async function POST(request: Request) {
       if (invalid) {
         return NextResponse.json({ error: invalid }, { status: 400 });
       }
-      personId = (await findOrCreateStudent(admin, studentName, college, registeredBy)).id;
+      personId = (
+        await findOrCreateStudent(admin, studentName, college, registeredBy, await getEventRoomFor(admin, registeredBy))
+      ).id;
     }
     const nowIso = new Date().toISOString();
 

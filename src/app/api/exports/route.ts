@@ -7,6 +7,7 @@ import autoTable from 'jspdf-autotable';
 import { recordAuditLog } from '@/lib/utils/audit';
 import { requireStaff } from '@/lib/auth/requireAdmin';
 import { isTeacher } from '@/lib/auth/staffScope';
+import { getEventRoomFor, getStaffEventRooms, resolveEventRoom } from '@/lib/staff/eventRoom';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,6 +30,7 @@ export async function GET(request: Request) {
     const format = searchParams.get('format') || 'csv'; // 'csv', 'xlsx', 'zip', 'pdf'
     const category = searchParams.get('category') || 'all'; // 'guide', 'phd_scholar', 'all'
     const source = searchParams.get('source') || 'attendance'; // 'attendance' or 'registered'
+    const roomFilter = (searchParams.get('event_room') || '').replace(/\s+/g, ' ').trim(); // '' = every event / room
 
     const admin = createAdminClient();
     // Teachers can only export the students and check-ins they registered.
@@ -45,7 +47,8 @@ export async function GET(request: Request) {
         normalized_email,
         phd_id,
         college,
-        metadata
+        metadata,
+        registered_by
       `);
 
       if (category === 'guide') {
@@ -68,6 +71,7 @@ export async function GET(request: Request) {
       let attListQuery = admin.from('attendance_records').select(`
         id,
         person_id,
+        registered_by,
         operation_id,
         captured_at_device,
         received_at_server,
@@ -102,6 +106,7 @@ export async function GET(request: Request) {
           received_at_server: att?.received_at_server || null,
           status: att ? 'confirmed' : 'registered_pending',
           event_sessions: att?.event_sessions || { name: 'General Session', events: { name: 'MIT Mysore Student Attendance' } },
+          registered_by: att?.registered_by ?? (p as any).registered_by ?? null,
           people: p,
           attendance_photos: att?.attendance_photos || null,
         };
@@ -115,6 +120,7 @@ export async function GET(request: Request) {
         received_at_server,
         status,
         session_id,
+        registered_by,
         event_sessions (
           name,
           events (
@@ -158,6 +164,22 @@ export async function GET(request: Request) {
       items = records || [];
     }
 
+    // Event / Room of every row, then keep only the chosen one (if any)
+    const [eventRooms, myRoom] = await Promise.all([
+      getStaffEventRooms(admin),
+      getEventRoomFor(admin, auth.admin.id as string),
+    ]);
+    items = items.map((r: any) => ({ ...r, event_room: resolveEventRoom(r.people?.metadata, r.registered_by, eventRooms) }));
+    if (roomFilter) {
+      const want = roomFilter.toLowerCase();
+      items = items.filter((r: any) => String(r.event_room).toLowerCase() === want);
+    }
+    const roomsInExport = Array.from(new Set(items.map((r: any) => r.event_room as string)));
+    const eventRoomLabel =
+      roomFilter ||
+      (roomsInExport.length === 1 ? roomsInExport[0] : roomsInExport.length === 0 ? myRoom || 'All events / rooms' : 'All events / rooms');
+    const fileTag = eventRoomLabel === 'All events / rooms' ? '' : `_${eventRoomLabel.replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 40)}`;
+
     // Map rows for CSV / Excel
     const dataRows = items.map((r: any, idx: number) => {
       const p = r.people;
@@ -169,6 +191,7 @@ export async function GET(request: Request) {
         'Operation ID': sanitizeCell(r.operation_id),
         'Student Name': sanitizeCell(p.name),
         'College Name': sanitizeCell((p.college || p.metadata?.College || p.metadata?.Institution || '')),
+        'Event / Room': sanitizeCell(r.event_room),
         'Event Name': sanitizeCell(r.event_sessions?.events?.name || 'MIT Mysore Student Attendance'),
         'Session Name': sanitizeCell(r.event_sessions?.name || 'General Session'),
         'Local Capture Time': sanitizeCell(r.captured_at_device || 'Not Yet Checked In'),
@@ -191,7 +214,7 @@ export async function GET(request: Request) {
         metadata: { format: 'csv', category, source, count: items.length },
       });
 
-      const filename = `MITM_Students_${source === 'registered' ? 'Registered_Directory' : 'Attendance'}_${new Date().toISOString().slice(0, 10)}.csv`;
+      const filename = `MITM_Students_${source === 'registered' ? 'Registered_Directory' : 'Attendance'}${fileTag}_${new Date().toISOString().slice(0, 10)}.csv`;
       return new NextResponse(csv, {
         headers: {
           'Content-Type': 'text/csv; charset=utf-8',
@@ -211,9 +234,9 @@ export async function GET(request: Request) {
         { wch: 36 },
         { wch: 20 },
         { wch: 26 },
-        { wch: 15 },
         { wch: 28 },
-        { wch: 30 },
+        { wch: 28 },
+        { wch: 28 },
         { wch: 18 },
         { wch: 26 },
         { wch: 16 },
@@ -238,7 +261,7 @@ export async function GET(request: Request) {
         metadata: { format: 'xlsx', category, source, count: items.length },
       });
 
-      const filename = `MITM_Students_${source === 'registered' ? 'Registered_Directory' : 'Attendance'}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      const filename = `MITM_Students_${source === 'registered' ? 'Registered_Directory' : 'Attendance'}${fileTag}_${new Date().toISOString().slice(0, 10)}.xlsx`;
       return new NextResponse(buffer, {
         headers: {
           'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -255,7 +278,7 @@ export async function GET(request: Request) {
 
       // Top Header Banner
       doc.setFillColor(20, 45, 78); // #142D4E navy
-      doc.rect(0, 0, pageWidth, 26, 'F');
+      doc.rect(0, 0, pageWidth, 34, 'F');
 
       // Institutional Header
       doc.setTextColor(255, 255, 255);
@@ -272,12 +295,19 @@ export async function GET(request: Request) {
           : 'Verified Student Attendance Report';
       doc.text(subTitle, 12, 16);
 
+      // Which event / room this PDF is for
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(255, 215, 106); // gold
+      doc.text(`Event / Room: ${eventRoomLabel}`, 12, 23);
+      doc.setFont('helvetica', 'normal');
+
       doc.setFontSize(7.5);
       doc.setTextColor(203, 213, 225);
       doc.text(
         `Generated: ${new Date().toLocaleString()} | Scope: ${source === 'registered' ? 'All Registered Students' : 'Verified Attendance'} | Total Students: ${items.length}`,
         12,
-        22
+        29.5
       );
 
       // Download photos in parallel chunks for PDF embedding
@@ -337,11 +367,11 @@ export async function GET(request: Request) {
 
       const autoTableFunc = (autoTable as any).default || autoTable;
       autoTableFunc(doc, {
-        startY: 30,
-        margin: { left: 12, right: 12 },
+        startY: 38,
+        margin: { left: 12, right: 12, bottom: 12 },
         tableWidth: 273,
-        head: [['#', 'Photo', 'Student Name', 'College Name', 'Check-In Status']],
-        body: tableRows.map((r) => [r[0], '', r[2], r[3], r[4]]),
+        head: [['#', 'Photo', 'Student Name', 'College Name', 'Event / Room', 'Check-In Status']],
+        body: tableRows.map((r, i) => [r[0], '', r[2], r[3], items[i]?.event_room || '', r[4]]),
         theme: 'grid',
         headStyles: {
           fillColor: [20, 45, 78], // #142D4E
@@ -350,6 +380,7 @@ export async function GET(request: Request) {
           fontSize: 7.5,
           halign: 'center',
           valign: 'middle',
+          minCellHeight: 9, // the header row does not need photo height
         },
         styles: {
           fontSize: 7,
@@ -362,9 +393,10 @@ export async function GET(request: Request) {
         columnStyles: {
           0: { cellWidth: 8, halign: 'center' },
           1: { cellWidth: 24, halign: 'center' },
-          2: { cellWidth: 80, fontStyle: 'bold' },
-          3: { cellWidth: 110 },
-          4: { cellWidth: 51, halign: 'center', fontStyle: 'bold' },
+          2: { cellWidth: 66, fontStyle: 'bold' },
+          3: { cellWidth: 82 },
+          4: { cellWidth: 48 },
+          5: { cellWidth: 45, halign: 'center', fontStyle: 'bold' },
         },
         didDrawCell: (data: any) => {
           if (data.column.index === 1 && data.cell.section === 'body') {
@@ -394,7 +426,7 @@ export async function GET(request: Request) {
           doc.setFontSize(7.5);
           doc.setTextColor(102, 112, 133);
           doc.text(
-            `MIT Mysore Student Attendance Tracker | Page ${pageNum}`,
+            `MIT Mysore Student Attendance Tracker | Event / Room: ${eventRoomLabel} | Page ${pageNum}`,
             12,
             pageHeight - 5
           );
@@ -412,10 +444,10 @@ export async function GET(request: Request) {
         action: 'ATTENDANCE_EXPORTED',
         entityType: 'EXPORT',
         outcome: 'success',
-        metadata: { format: 'pdf', category, source, count: items.length },
+        metadata: { format: 'pdf', category, source, count: items.length, event_room: eventRoomLabel },
       });
 
-      const filename = `MITM_Students_${source === 'registered' ? 'Registered_Directory' : 'Attendance'}_${new Date().toISOString().slice(0, 10)}.pdf`;
+      const filename = `MITM_Students_${source === 'registered' ? 'Registered_Directory' : 'Attendance'}${fileTag}_${new Date().toISOString().slice(0, 10)}.pdf`;
       return new NextResponse(pdfBuffer, {
         headers: {
           'Content-Type': 'application/pdf',
@@ -440,6 +472,7 @@ export async function GET(request: Request) {
           'Operation ID': sanitizeCell(r.operation_id),
           'Student Name': sanitizeCell(p.name),
           'College Name': sanitizeCell((p.college || p.metadata?.College || p.metadata?.Institution || '')),
+          'Event / Room': sanitizeCell(r.event_room),
           'Captured Timestamp': sanitizeCell(r.captured_at_device),
           'Photo Filename': filename,
           'Storage Key': sanitizeCell(photo?.storage_object_key || ''),
@@ -455,6 +488,7 @@ export async function GET(request: Request) {
         'README.txt',
         `MIT MYSORE STUDENT ATTENDANCE TRACKER - ATTENDANCE PHOTOGRAPHS ARCHIVE
 Generated: ${new Date().toISOString()}
+Event / Room: ${eventRoomLabel}
 Total Records: ${items.length}
 
 Structure:
@@ -498,7 +532,7 @@ Confidential. For authorized institutional use only.`
         metadata: { format: 'zip', category, count: items.length },
       });
 
-      const filename = `MITM_Students_Attendance_Photos_${new Date().toISOString().slice(0, 10)}.zip`;
+      const filename = `MITM_Students_Attendance_Photos${fileTag}_${new Date().toISOString().slice(0, 10)}.zip`;
       return new NextResponse(zipBlob as any, {
         headers: {
           'Content-Type': 'application/zip',

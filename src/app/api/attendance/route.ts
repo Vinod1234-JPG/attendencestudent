@@ -5,6 +5,7 @@ import { getDevStorage, removeDevAttendanceRecord } from '@/lib/db/devStore';
 import { recordAuditLog } from '@/lib/utils/audit';
 import { requireStaff } from '@/lib/auth/requireAdmin';
 import { isTeacher } from '@/lib/auth/staffScope';
+import { GENERAL_EVENT_ROOM, getStaffEventRooms, resolveEventRoom } from '@/lib/staff/eventRoom';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -45,7 +46,7 @@ export async function GET(request: Request) {
       }
 
       const total = records.length;
-      const paginated = records.slice(offset, offset + limit);
+      const paginated = records.slice(offset, offset + limit).map((r) => ({ ...r, event_room: GENERAL_EVENT_ROOM }));
 
       return NextResponse.json(
         {
@@ -81,6 +82,7 @@ export async function GET(request: Request) {
         status,
         session_id,
         person_id,
+        registered_by,
         people!inner (
           id,
           name,
@@ -124,7 +126,7 @@ export async function GET(request: Request) {
       .order('captured_at_device', { ascending: false })
       .range(offset, offset + limit - 1);
 
-    const { data: records, count, error } = await query;
+    const [{ data: records, count, error }, eventRooms] = await Promise.all([query, getStaffEventRooms(admin)]);
 
     if (error) {
       console.error('Attendance fetch error:', error);
@@ -158,6 +160,7 @@ export async function GET(request: Request) {
         received_at_server: rec.received_at_server,
         status: rec.status,
         session_name: rec.event_sessions?.name || 'Main Session',
+        event_room: resolveEventRoom(rec.people.metadata, rec.registered_by, eventRooms),
         attendee: {
           id: rec.people.id,
           name: rec.people.name,

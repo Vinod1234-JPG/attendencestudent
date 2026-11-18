@@ -7,6 +7,7 @@ import { cleanDisplayText, validateStudentDetails } from '@/lib/utils/normalizat
 import { findOrCreateDevStudent, findOrCreateStudent, findStudent } from '@/lib/students/findOrCreateStudent';
 import { emitRegistration } from '@/lib/live-bus';
 import { getCurrentAdmin } from '@/lib/auth/requireAdmin';
+import { getEventRoomFor } from '@/lib/staff/eventRoom';
 
 export const dynamic = 'force-dynamic';
 
@@ -117,9 +118,10 @@ export async function POST(request: Request) {
     const registeredBy = operator?.id ?? null;
 
     // The session check and the student lookup do not depend on each other: run them together.
-    const [{ data: session, error: sessErr }, existingStudent] = await Promise.all([
+    const [{ data: session, error: sessErr }, existingStudent, eventRoom] = await Promise.all([
       admin.from('event_sessions').select('id, name, status, event_id').eq('id', sessionId).single(),
       findStudent(admin, studentName, college),
+      getEventRoomFor(admin, registeredBy), // the teacher's event / room is saved with the registration
     ]);
 
     if (sessErr || !session || session.status !== 'open') {
@@ -130,7 +132,7 @@ export async function POST(request: Request) {
     }
 
     // Only register a first-time student once we know the session is open.
-    const person = existingStudent ?? (await findOrCreateStudent(admin, studentName, college, registeredBy));
+    const person = existingStudent ?? (await findOrCreateStudent(admin, studentName, college, registeredBy, eventRoom));
     const personId = person.id;
 
     if (person.created) {
