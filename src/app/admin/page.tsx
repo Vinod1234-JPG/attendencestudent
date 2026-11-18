@@ -16,6 +16,7 @@ import {
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { usePolling } from '@/lib/hooks/usePolling';
 
 interface DashboardStats {
   totalGuidesRegistered: number;
@@ -49,7 +50,7 @@ export default function AdminDashboardPage() {
       // Fetch recent attendance and registry statistics in parallel for instant speed
       const [recRes, attRes] = await Promise.all([
         fetch(`/api/attendance?limit=5&_t=${Date.now()}`, { cache: 'no-store' }),
-        fetch(`/api/admin/attendees?_t=${Date.now()}`, { cache: 'no-store' }),
+        fetch(`/api/admin/attendees?summary=1&_t=${Date.now()}`, { cache: 'no-store' }),
       ]);
 
       const [data, attData] = await Promise.all([recRes.json(), attRes.json()]);
@@ -85,17 +86,10 @@ export default function AdminDashboardPage() {
 
   useEffect(() => {
     fetchStats();
-
-    // Auto-refresh when tab gains focus or every 10 seconds for real-time live events
-    const onFocus = () => fetchStats();
-    window.addEventListener('focus', onFocus);
-    const interval = setInterval(fetchStats, 10000);
-
-    return () => {
-      window.removeEventListener('focus', onFocus);
-      clearInterval(interval);
-    };
   }, []);
+
+  // Refresh every 20 s, but only while this tab is visible
+  usePolling(fetchStats, 20000);
 
   return (
     <div className="space-y-8">

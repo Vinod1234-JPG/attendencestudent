@@ -17,6 +17,7 @@ export interface LiveRegistration {
 }
 
 const EVENT = 'registration.created';
+const RESET_EVENT = 'registration.reset';
 const g = globalThis as unknown as { __mitmLiveBus?: EventEmitter };
 
 function bus(): EventEmitter {
@@ -33,6 +34,22 @@ export function emitRegistration(registration: LiveRegistration): void {
   } catch (err) {
     console.warn('[live-bus] emit failed:', err);
   }
+}
+
+/** Tells every Live Display that all data was removed so it can go back to the waiting screen. */
+export function emitReset(): void {
+  try {
+    bus().emit(RESET_EVENT);
+  } catch (err) {
+    console.warn('[live-bus] reset emit failed:', err);
+  }
+}
+
+export function onReset(listener: () => void): () => void {
+  bus().on(RESET_EVENT, listener);
+  return () => {
+    bus().off(RESET_EVENT, listener);
+  };
 }
 
 /** Subscribes to new registrations. Returns an unsubscribe function. */

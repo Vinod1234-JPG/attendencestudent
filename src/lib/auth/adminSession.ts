@@ -34,21 +34,22 @@ export async function getSupabaseAdmin(supabase: SupabaseClient): Promise<AdminI
   } = await supabase.auth.getUser();
   if (error || !user) return null;
 
-  let profile = (
-    await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
-  ).data;
-
-  // Fallback to service role lookup if unprivileged client was blocked by RLS
+  // One query: look the role up with the server key when available (row-level security would otherwise
+  // block the user's own client and force a second attempt). Fall back to the user's client without it.
   const serviceKey = getSupabaseServiceKey();
   const supabaseUrl = getSupabaseUrl();
-  if (!profile && serviceKey && supabaseUrl) {
+  let profile: { role: string } | null = null;
+  if (serviceKey && supabaseUrl) {
     try {
       const { createClient } = await import('@supabase/supabase-js');
       const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
       profile = (await admin.from('profiles').select('role').eq('id', user.id).maybeSingle()).data;
     } catch {
-      // ignore fallback error
+      // fall through to the user's own client
     }
+  }
+  if (!profile) {
+    profile = (await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()).data;
   }
 
   if (!profile || !(ADMIN_ROLES as readonly string[]).includes(profile.role)) return null;

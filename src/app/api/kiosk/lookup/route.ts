@@ -45,6 +45,9 @@ export async function POST(request: Request) {
 
     const admin = createAdminClient();
 
+    // Start the student lookup right away; it does not depend on the event or session.
+    const studentLookup = findStudent(admin, name, college).catch(() => null);
+
     const { data: event, error: eventErr } = await admin
       .from('events')
       .select('id, name, status, kiosk_enabled')
@@ -84,7 +87,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const existing = await findStudent(admin, name, college);
+    const existing = await studentLookup;
 
     let alreadyAttended = false;
     if (existing) {

@@ -16,6 +16,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { RemoveAllData } from '@/components/admin/RemoveAllData';
 
 export default function EventSettingsPage() {
   const [isLoading, setIsLoading] = useState(true);
@@ -275,6 +276,8 @@ export default function EventSettingsPage() {
           </Button>
         </div>
       </form>
+
+      <RemoveAllData />
     </div>
   );
 }

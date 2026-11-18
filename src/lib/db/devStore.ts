@@ -144,6 +144,14 @@ export function removeDevAttendanceRecord(idOrPersonId: string): boolean {
   return false;
 }
 
+/** Removes every student and attendance record from the local development store. */
+export function clearDevData(): { people: number; attendance: number } {
+  const store = loadStorage();
+  const removed = { people: store.people.length, attendance: store.attendanceRecords.length };
+  saveStorage({ attendanceRecords: [], people: [] });
+  return removed;
+}
+
 export function addDevPeople(newPeople: DevPerson[]) {
   const store = loadStorage();
   const existingMap = new Map(store.people.map((p) => [p.id, p]));

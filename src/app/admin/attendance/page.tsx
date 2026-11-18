@@ -23,6 +23,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Modal } from '@/components/ui/modal';
+import { usePolling } from '@/lib/hooks/usePolling';
 
 export default function AttendanceRecordsPage() {
   const [records, setRecords] = useState<any[]>([]);
@@ -89,17 +90,10 @@ export default function AttendanceRecordsPage() {
 
   useEffect(() => {
     fetchRecords(debouncedSearch);
-
-    // Auto-refresh when tab gains focus or every 10 seconds for real-time live events
-    const onFocus = () => fetchRecords(searchRef.current);
-    window.addEventListener('focus', onFocus);
-    const interval = setInterval(() => fetchRecords(searchRef.current), 10000);
-
-    return () => {
-      window.removeEventListener('focus', onFocus);
-      clearInterval(interval);
-    };
   }, [page, category, limit, debouncedSearch]);
+
+  // Refresh every 20 s, but only while this tab is visible
+  usePolling(() => fetchRecords(searchRef.current), 20000);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();

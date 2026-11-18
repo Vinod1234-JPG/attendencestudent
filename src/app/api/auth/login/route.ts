@@ -4,6 +4,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { recordAuditLog } from '@/lib/utils/audit';
 import { CONFIG_HELP, SupabaseConfigError } from '@/lib/supabase/config';
+import { ADMIN_CACHE_COOKIE, adminCacheCookieOptions, signAdminCache } from '@/lib/auth/adminCache';
 import {
   ADMIN_ROLES,
   DEV_SESSION_COOKIE,
@@ -161,6 +162,14 @@ export async function POST(request: Request) {
     });
     // Remove the legacy unsigned flag cookie if a browser still has it.
     response.cookies.delete(DEV_SESSION_COOKIE);
+    // We just verified this admin: remember it briefly so the next requests skip the database round trips.
+    const cacheValue = await signAdminCache({
+      id: data.user.id,
+      email: data.user.email || '',
+      role: profile.role,
+      mode: 'supabase',
+    });
+    if (cacheValue) response.cookies.set(ADMIN_CACHE_COOKIE, cacheValue, adminCacheCookieOptions);
     return response;
   } catch (err) {
     console.error('Login error:', err);

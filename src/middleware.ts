@@ -8,6 +8,12 @@ import {
   isPlaceholderMode,
   verifyDevSession,
 } from '@/lib/auth/adminSession';
+import {
+  ADMIN_CACHE_COOKIE,
+  adminCacheCookieOptions,
+  signAdminCache,
+  verifyAdminCache,
+} from '@/lib/auth/adminCache';
 
 /**
  * API routes the public kiosk (unauthenticated) needs. Everything else under /api
@@ -39,6 +45,10 @@ export async function middleware(request: NextRequest) {
   if (isPlaceholderMode()) {
     admin = await verifyDevSession(request.cookies.get(DEV_SESSION_COOKIE)?.value);
   } else {
+    // Fast path: verified a moment ago (signed cookie). No network round trips to the database.
+    const cached = await verifyAdminCache(request.cookies.get(ADMIN_CACHE_COOKIE)?.value);
+    if (cached) return response;
+
     const supabase = createServerClient(
       getSupabaseUrl()!,
       getSupabaseAnonKey() || 'missing-anon-key',
@@ -65,7 +75,13 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  if (admin) return response;
+  if (admin) {
+    if (!isPlaceholderMode()) {
+      const value = await signAdminCache(admin);
+      if (value) response.cookies.set(ADMIN_CACHE_COOKIE, value, adminCacheCookieOptions);
+    }
+    return response;
+  }
 
   if (isApi) {
     return NextResponse.json(

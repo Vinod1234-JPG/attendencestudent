@@ -1,4 +1,5 @@
 import React from 'react';
+import { redirect } from 'next/navigation';
 import { AdminShell } from '@/components/layout/AdminShell';
 import { getCurrentAdmin } from '@/lib/auth/requireAdmin';
 
@@ -11,6 +12,7 @@ export default async function AdminLayout({
 }) {
   // Middleware already redirects unauthenticated visitors; this reads who is signed in.
   const admin = await getCurrentAdmin();
+  if (!admin) redirect('/login');
 
   return (
     <AdminShell

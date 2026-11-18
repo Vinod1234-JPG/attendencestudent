@@ -4,7 +4,7 @@ import { recordAuditLog } from '@/lib/utils/audit';
 import { addDevAttendanceRecord, getDevStorage } from '@/lib/db/devStore';
 import { isPlaceholderMode } from '@/lib/auth/adminSession';
 import { cleanDisplayText, validateStudentDetails } from '@/lib/utils/normalization';
-import { findOrCreateDevStudent, findOrCreateStudent } from '@/lib/students/findOrCreateStudent';
+import { findOrCreateDevStudent, findOrCreateStudent, findStudent } from '@/lib/students/findOrCreateStudent';
 import { emitRegistration } from '@/lib/live-bus';
 
 export const dynamic = 'force-dynamic';
@@ -110,11 +110,11 @@ export async function POST(request: Request) {
     // ------------------------------------------------------------------
     const admin = createAdminClient();
 
-    const { data: session, error: sessErr } = await admin
-      .from('event_sessions')
-      .select('id, name, status, event_id')
-      .eq('id', sessionId)
-      .single();
+    // The session check and the student lookup do not depend on each other: run them together.
+    const [{ data: session, error: sessErr }, existingStudent] = await Promise.all([
+      admin.from('event_sessions').select('id, name, status, event_id').eq('id', sessionId).single(),
+      findStudent(admin, studentName, college),
+    ]);
 
     if (sessErr || !session || session.status !== 'open') {
       return NextResponse.json(
@@ -123,7 +123,8 @@ export async function POST(request: Request) {
       );
     }
 
-    const person = await findOrCreateStudent(admin, studentName, college);
+    // Only register a first-time student once we know the session is open.
+    const person = existingStudent ?? (await findOrCreateStudent(admin, studentName, college));
     const personId = person.id;
 
     if (person.created) {

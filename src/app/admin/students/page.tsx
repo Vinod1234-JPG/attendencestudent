@@ -14,6 +14,7 @@ import {
   ArrowRight,
   Camera,
 } from 'lucide-react';
+import { usePolling } from '@/lib/hooks/usePolling';
 
 interface Student {
   id: string;
@@ -91,9 +92,10 @@ export default function StudentRegistrationPage() {
 
   useEffect(() => {
     load();
-    const id = setInterval(() => load(true), 15000);
-    return () => clearInterval(id);
   }, []);
+
+  // Refresh every 20 s, but only while this tab is visible
+  usePolling(() => load(true), 20000);
 
   const collegeStats = useMemo(() => {
     const map = new Map<string, number>();

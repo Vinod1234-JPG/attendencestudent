@@ -94,20 +94,42 @@ export async function GET(request: Request) {
 
     const admin = createAdminClient();
 
-    // 1. Fetch all registered people
-    const { data: peopleRaw, error: peopleErr } = await admin
-      .from('people')
-      .select('*');
+    // Lightweight mode for the dashboard: totals only, three tiny count queries instead of the full list.
+    if (searchParams.get('summary') === '1') {
+      const [all, students, attended] = await Promise.all([
+        admin.from('people').select('*', { count: 'exact', head: true }),
+        admin.from('people').select('*', { count: 'exact', head: true }).eq('category', 'student'),
+        admin.from('attendance_records').select('*', { count: 'exact', head: true }),
+      ]);
+      const total = all.count || 0;
+      return NextResponse.json(
+        {
+          success: true,
+          counts: {
+            total,
+            students: students.count || 0,
+            attended: attended.count || 0,
+            pending: Math.max(0, total - (attended.count || 0)),
+          },
+        },
+        { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
+      );
+    }
+
+    // 1 + 2. Fetch all registered people and all attendance records (with photos) at the same time
+    const [peopleRes, attendanceRes] = await Promise.all([
+      admin.from('people').select('*'),
+      admin
+        .from('attendance_records')
+        .select('id, person_id, captured_at_device, status, attendance_photos(storage_object_key)'),
+    ]);
+    const { data: peopleRaw, error: peopleErr } = peopleRes;
+    const { data: attendanceRaw } = attendanceRes;
 
     if (peopleErr) {
       console.error('Fetch attendees error:', peopleErr);
       return NextResponse.json({ error: peopleErr.message }, { status: 500 });
     }
-
-    // 2. Fetch all attendance records with photos
-    const { data: attendanceRaw } = await admin
-      .from('attendance_records')
-      .select('id, person_id, captured_at_device, status, attendance_photos(storage_object_key)');
 
     const attendanceMap = new Map<string, any>();
     (attendanceRaw || []).forEach((att) => {

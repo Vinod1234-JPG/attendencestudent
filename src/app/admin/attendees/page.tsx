@@ -312,6 +312,7 @@ export default function LiveDisplayPage() {
   const currentRef = useRef<Registration | null>(null);
   const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const clearPrev = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastShownAt = useRef(0); // when (ms) the current student was put on screen
 
   /** Shows a registration if it is newer than the one on screen; preloads the photo first. */
   const apply = useCallback((reg: Registration) => {
@@ -324,6 +325,7 @@ export default function LiveDisplayPage() {
       if (now && !(time(reg) > time(now))) return; // something newer arrived while the image loaded
       setPrevious(now);
       currentRef.current = reg;
+      lastShownAt.current = Date.now();
       setCurrent(reg);
       setSlideKey((k) => k + 1);
       if (clearPrev.current) clearTimeout(clearPrev.current);
@@ -336,7 +338,16 @@ export default function LiveDisplayPage() {
     img.src = reg.photoUrl;
   }, []);
 
+  /** Back to the waiting screen (after "Remove all data"). */
+  const clearScreen = useCallback(() => {
+    if (!currentRef.current) return;
+    currentRef.current = null;
+    setPrevious(null);
+    setCurrent(null);
+  }, []);
+
   const fetchLatest = useCallback(async () => {
+    const startedAt = Date.now();
     try {
       const res = await fetch(`/api/admin/live/latest?_t=${Date.now()}`, { cache: 'no-store' });
       if (res.status === 401) {
@@ -345,10 +356,11 @@ export default function LiveDisplayPage() {
       }
       const data = await res.json().catch(() => null);
       if (res.ok && data?.registration) apply(data.registration as Registration);
+      else if (res.ok && data && data.registration === null && startedAt > lastShownAt.current) clearScreen(); // all data was removed (ignore a reply that was already stale)
     } catch {
       // network hiccup: the next poll or stream event will catch up
     }
-  }, [apply]);
+  }, [apply, clearScreen]);
 
   // Initial load + live stream + safety poll
   useEffect(() => {
@@ -358,6 +370,7 @@ export default function LiveDisplayPage() {
     try {
       es = new EventSource('/api/admin/live/stream');
       es.addEventListener('ready', () => fetchLatest());
+      es.addEventListener('reset', () => clearScreen());
       es.addEventListener('registration', (e) => {
         try {
           apply(JSON.parse((e as MessageEvent).data));
@@ -378,7 +391,7 @@ export default function LiveDisplayPage() {
       clearInterval(poll);
       if (clearPrev.current) clearTimeout(clearPrev.current);
     };
-  }, [apply, fetchLatest]);
+  }, [apply, fetchLatest, clearScreen]);
 
   // Cover the whole viewport, no scrollbars
   useEffect(() => {

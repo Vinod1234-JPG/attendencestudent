@@ -1,5 +1,5 @@
 import { requireAdmin } from '@/lib/auth/requireAdmin';
-import { onRegistration } from '@/lib/live-bus';
+import { onRegistration, onReset } from '@/lib/live-bus';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -28,6 +28,7 @@ export async function GET(request: Request) {
       const unsubscribe = onRegistration((registration) => {
         write(`event: registration\ndata: ${JSON.stringify(registration)}\n\n`);
       });
+      const unsubscribeReset = onReset(() => write('event: reset\ndata: {}\n\n'));
       const ping = setInterval(() => write(': ping\n\n'), 15000);
 
       cleanup = () => {
@@ -35,6 +36,7 @@ export async function GET(request: Request) {
         closed = true;
         clearInterval(ping);
         unsubscribe();
+        unsubscribeReset();
         try {
           controller.close();
         } catch {
