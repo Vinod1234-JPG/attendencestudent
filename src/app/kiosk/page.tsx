@@ -17,8 +17,9 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { CameraView } from '@/components/kiosk/CameraView';
+import { CollegeCombobox } from '@/components/kiosk/CollegeCombobox';
 import { getOfflineDb, OfflineAttendanceRecord } from '@/lib/db/dexie';
-import { cleanDisplayText, validateStudentDetails } from '@/lib/utils/normalization';
+import { cleanDisplayText, normalizeForMatch, validateStudentDetails } from '@/lib/utils/normalization';
 import { syncEngine } from '@/lib/sync/syncEngine';
 import { AppFooter } from '@/components/common/AppFooter';
 
@@ -46,6 +47,8 @@ export default function KioskPage() {
 
   const [nameInput, setNameInput] = useState<string>('');
   const [collegeInput, setCollegeInput] = useState<string>('');
+  // Colleges other students already used (most used first), so the next student can pick one
+  const [colleges, setColleges] = useState<string[]>([]);
   const [attendee, setAttendee] = useState<AttendeeData | null>(null);
 
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -58,6 +61,42 @@ export default function KioskPage() {
   const [operator, setOperator] = useState<{ name: string; role: string } | null>(null);
 
   const resetTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Load the college list; keep a copy on this device so it also works offline.
+  const loadColleges = async () => {
+    try {
+      const res = await fetch('/api/kiosk/colleges', { cache: 'no-store' });
+      const data = await res.json();
+      if (res.ok && Array.isArray(data.colleges)) {
+        setColleges(data.colleges);
+        try {
+          localStorage.setItem('mitm_colleges', JSON.stringify(data.colleges));
+        } catch {}
+        return;
+      }
+    } catch {}
+    try {
+      const cached = JSON.parse(localStorage.getItem('mitm_colleges') || '[]');
+      if (Array.isArray(cached)) setColleges(cached);
+    } catch {}
+  };
+
+  useEffect(() => {
+    loadColleges();
+  }, []);
+
+  // Add a just-registered college to the list right away (also helps the next student when offline).
+  const rememberCollege = (college: string) => {
+    setColleges((prev) => {
+      const key = normalizeForMatch(college);
+      if (!key || prev.some((c) => normalizeForMatch(c) === key)) return prev;
+      const next = [...prev, college];
+      try {
+        localStorage.setItem('mitm_colleges', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  };
 
   useEffect(() => {
     fetch('/api/kiosk/operator', { cache: 'no-store' })
@@ -118,6 +157,7 @@ export default function KioskPage() {
     setCapturedBlob(blob);
     setCapturedDataUrl(dataUrl);
     setStep('DETAILS_WITH_PHOTO');
+    loadColleges(); // pick up colleges added by the previous students
   };
 
   // STEP 2: Student enters name + college
@@ -232,6 +272,7 @@ export default function KioskPage() {
 
         if (res.ok && data.success) {
           setIsSavedOffline(false);
+          rememberCollege(attendee.college);
           setStep('SUCCESS');
           startAutoResetTimer();
           setIsLoading(false);
@@ -270,7 +311,8 @@ export default function KioskPage() {
 
       await db.attendance_queue.put(offlineRecord);
       setIsSavedOffline(true);
-      setStep('SUCCESS');
+      rememberCollege(attendee.college);
+          setStep('SUCCESS');
       startAutoResetTimer();
       syncEngine.triggerSync().catch(() => {});
     } catch (dbErr: any) {
@@ -446,16 +488,7 @@ export default function KioskPage() {
                     </div>
 
                     <div>
-                      <Input
-                        label="College Name"
-                        placeholder="Enter your college name"
-                        helperText="Use the same college name every time you check in."
-                        value={collegeInput}
-                        onChange={(e) => setCollegeInput(e.target.value)}
-                        maxLength={160}
-                        autoComplete="off"
-                        required
-                      />
+                      <CollegeCombobox value={collegeInput} onChange={setCollegeInput} colleges={colleges} maxLength={160} />
                     </div>
 
                     {errorMessage && (
