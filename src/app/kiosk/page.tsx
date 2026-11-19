@@ -175,6 +175,23 @@ export default function KioskPage() {
     setIsLoading(true);
     setErrorMessage(null);
 
+    // This device may still be uploading this student's check-in from a moment ago
+    try {
+      const key = (v: string) => v.toLowerCase().replace(/\s+/g, ' ').trim();
+      const queued = await getOfflineDb()
+        .attendance_queue.where('sync_status')
+        .anyOf('pending', 'uploading', 'failed') // uploaded ones are checked by the server
+        .filter((r) => key(r.person_name) === key(name) && key(r.college || r.identifier) === key(college))
+        .first();
+      if (queued) {
+        setErrorMessage(`Attendance has already been recorded for ${queued.person_name} (${queued.college || queued.identifier}).`);
+        setIsLoading(false);
+        return;
+      }
+    } catch {
+      // no device storage: the server check below still applies
+    }
+
     // Online: confirm the kiosk is open and the student is not already marked present
     if (navigator.onLine) {
       try {
@@ -242,82 +259,80 @@ export default function KioskPage() {
   };
 
   // STEP 3: Confirm and Persist Attendance
+  // The check-in is saved on this device first (a few milliseconds) and the student sees "recorded" at once;
+  // it then uploads in the background (the same safe queue used for offline mode, retried until stored).
+  // The "already checked in" check already happened at the previous step.
   const handleConfirmAndSubmit = async () => {
     if (!attendee || !capturedBlob || isLoading) return;
 
-    setStep('SAVING');
     setIsLoading(true);
 
     const operationId = crypto.randomUUID();
     const nowIso = new Date().toISOString();
 
-    // Direct submission if online
-    if (navigator.onLine) {
-      try {
-        const formData = new FormData();
-        formData.append('operation_id', operationId);
-        formData.append('session_id', attendee.session_id);
-        formData.append('attendee_name', attendee.name);
-        formData.append('college', attendee.college);
-        formData.append('category', 'student');
-        formData.append('captured_at_device', nowIso);
-        formData.append('photo', capturedBlob, `${operationId}.jpg`);
+    const offlineRecord: OfflineAttendanceRecord = {
+      operation_id: operationId,
+      session_id: attendee.session_id,
+      person_id: attendee.id || '',
+      category: 'student',
+      identifier: attendee.college,
+      person_name: attendee.name,
+      college: attendee.college,
+      captured_at_device: nowIso,
+      photo_blob: capturedBlob,
+      photo_mime_type: 'image/jpeg',
+      sync_status: 'pending',
+      attempt_count: 0,
+      last_attempted_at: null,
+      last_error: null,
+      created_at: nowIso,
+    };
 
-        const res = await fetch('/api/kiosk/submit', {
-          method: 'POST',
-          body: formData,
-        });
-
-        const data = await res.json();
-
-        if (res.ok && data.success) {
-          setIsSavedOffline(false);
-          rememberCollege(attendee.college);
-          setStep('SUCCESS');
-          startAutoResetTimer();
-          setIsLoading(false);
-          return;
-        } else {
-          setErrorMessage(data.error || 'Server rejected attendance submission.');
-          setStep('CONFIRM_DETAILS');
-          setIsLoading(false);
-          return;
-        }
-      } catch (submitErr) {
-        console.warn('Network submit failed; storing in offline queue:', submitErr);
-      }
+    // 1. Save on this device and show success straight away
+    try {
+      await getOfflineDb().attendance_queue.put(offlineRecord);
+      setIsSavedOffline(!navigator.onLine);
+      rememberCollege(attendee.college);
+      setStep('SUCCESS');
+      startAutoResetTimer();
+      setIsLoading(false);
+      syncEngine.triggerSync().catch(() => {}); // upload now, in the background
+      return;
+    } catch (dbErr) {
+      console.warn('Device storage unavailable; sending directly:', dbErr);
     }
 
-    // Save to durable IndexedDB queue
+    // 2. No device storage on this browser (e.g. private mode): send directly and wait for the answer
+    setStep('SAVING');
     try {
-      const db = getOfflineDb();
-      const offlineRecord: OfflineAttendanceRecord = {
-        operation_id: operationId,
-        session_id: attendee.session_id,
-        person_id: attendee.id || '',
-        category: 'student',
-        identifier: attendee.college,
-        person_name: attendee.name,
-        college: attendee.college,
-        captured_at_device: nowIso,
-        photo_blob: capturedBlob,
-        photo_mime_type: 'image/jpeg',
-        sync_status: 'pending',
-        attempt_count: 0,
-        last_attempted_at: null,
-        last_error: null,
-        created_at: nowIso,
-      };
+      const formData = new FormData();
+      formData.append('operation_id', operationId);
+      formData.append('session_id', attendee.session_id);
+      formData.append('attendee_name', attendee.name);
+      formData.append('college', attendee.college);
+      formData.append('category', 'student');
+      formData.append('captured_at_device', nowIso);
+      formData.append('photo', capturedBlob, `${operationId}.jpg`);
 
-      await db.attendance_queue.put(offlineRecord);
-      setIsSavedOffline(true);
-      rememberCollege(attendee.college);
-          setStep('SUCCESS');
-      startAutoResetTimer();
-      syncEngine.triggerSync().catch(() => {});
-    } catch (dbErr: any) {
-      console.error('Failed to store in IndexedDB:', dbErr);
-      setErrorMessage('Local storage error.');
+      const res = await fetch('/api/kiosk/submit', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        setIsSavedOffline(false);
+        rememberCollege(attendee.college);
+        setStep('SUCCESS');
+        startAutoResetTimer();
+      } else {
+        setErrorMessage(data.error || 'Server rejected attendance submission.');
+        setStep('CONFIRM_DETAILS');
+      }
+    } catch (submitErr) {
+      console.warn('Direct submit failed:', submitErr);
+      setErrorMessage('Could not record attendance. Please check the internet connection and try again.');
       setStep('CONFIRM_DETAILS');
     } finally {
       setIsLoading(false);

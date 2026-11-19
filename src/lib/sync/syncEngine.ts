@@ -23,6 +23,7 @@ function retryDelayMs(attempts: number): number {
 
 class SyncEngine {
   private isSyncing = false;
+  private rerunRequested = false; // a check-in was queued while a round was running
   private listeners: Set<SyncListener> = new Set();
   private lastSyncAt: Date | null = null;
   private lastError: string | null = null;
@@ -79,7 +80,12 @@ class SyncEngine {
    * - Failed check-ins wait a little longer after each failure (backoff), unless `force` (the Sync now button).
    */
   public async triggerSync(options: { force?: boolean } = {}): Promise<{ success: boolean; synced: number; failed: number }> {
-    if (this.isSyncing || typeof window === 'undefined') {
+    if (typeof window === 'undefined') {
+      return { success: false, synced: 0, failed: 0 };
+    }
+    if (this.isSyncing) {
+      // Do not make a new check-in wait for the next focus/online event: run again right after this round.
+      this.rerunRequested = true;
       return { success: false, synced: 0, failed: 0 };
     }
 
@@ -95,6 +101,7 @@ class SyncEngine {
 
     let synced = 0;
     let failed = 0;
+    let moreWaiting = false;
 
     try {
       const db = getOfflineDb();
@@ -122,6 +129,7 @@ class SyncEngine {
           return !last || now - last >= retryDelayMs(item.attempt_count);
         })
         .slice(0, BATCH_SIZE);
+      moreWaiting = candidates.length > recordsToSync.length && recordsToSync.length === BATCH_SIZE;
 
       const uploadOne = async (item: OfflineAttendanceRecord) => {
         try {
@@ -188,6 +196,9 @@ class SyncEngine {
     } finally {
       this.isSyncing = false;
       await this.emitStatus();
+      const again = this.rerunRequested || (moreWaiting && synced > 0);
+      this.rerunRequested = false;
+      if (again) setTimeout(() => this.triggerSync().catch(() => {}), 0);
     }
 
     return { success: failed === 0, synced, failed };
