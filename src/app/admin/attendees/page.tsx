@@ -84,7 +84,7 @@ function Backdrop() {
   );
 }
 
-/** "Developed by Vovalyx" credit, bottom-left, linking to the company website. */
+/** "Engineered by Vovalyx" credit, bottom-left, linking to the company website. */
 function DeveloperCredit() {
   return (
     <a
@@ -93,10 +93,10 @@ function DeveloperCredit() {
       rel="noopener noreferrer"
       onClick={(e) => e.stopPropagation()}
       className="absolute bottom-[3cqh] left-[3cqw] z-20 flex items-center gap-[0.7cqw] text-white/80 transition-opacity hover:text-white"
-      aria-label="Developed by Vovalyx (opens vovalyx.in)"
+      aria-label="Engineered by Vovalyx (opens vovalyx.in)"
     >
       <span className="font-medium text-slate-300/80" style={{ fontSize: 'max(1.7cqh, 11px)' }}>
-        Developed by
+        Engineered by
       </span>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={DEVELOPER_LOGO} alt="" className="aspect-square h-[max(3.6cqh,22px)] object-contain" />
@@ -137,13 +137,13 @@ function Brand() {
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={COLLEGE_LOGO}
-        alt="Maharaja Institute of Technology Mysuru"
+        alt="Maharaja Institute of Technology Mysore"
         className="aspect-square h-[max(9cqh,56px)] rounded-full bg-white object-contain p-[3px] shadow-[0_0_2.4vw_rgba(245,165,36,0.45)] ring-[0.25cqw] ring-amber-400/80"
       />
       <span className="h-[7.5cqh] w-[0.14cqw] rounded-full bg-gradient-to-b from-transparent via-amber-400 to-transparent" />
       <div className="leading-tight">
         <div className="font-extrabold tracking-tight text-white" style={{ fontSize: 'max(3.2cqh, 16px)' }}>
-          Maharaja Institute of Technology Mysuru
+          Maharaja Institute of Technology Mysore
         </div>
         <div className="font-medium text-slate-200/90" style={{ fontSize: 'max(2.6cqh, 13px)' }}>
           Student Attendance Tracker
